@@ -1,7 +1,11 @@
-from aiogram.types import CallbackQuery, FSInputFile, InputMediaPhoto
+from aiogram.types import CallbackQuery, FSInputFile, InputMediaPhoto, Message
+from aiogram.fsm.context import FSMContext
+from aiogram.filters import Command
+from src.database.database_base import Session
 from aiogram import Router, F
 from functions import *
 from keyboards import *
+from states import *
 
 
 router_callback = Router()
@@ -116,5 +120,68 @@ class PersonalAccountCallback:
         await callback.message.edit_media(media=photo, reply_markup=BackToMenu)
 
 
+# class SupportCallback:
+#     def __init__(self, router: Router, admin_id: int):
+#         self.router = router
+#         self.admin_id = admin_id
+#         self.register_callbacks()
+#
+#     def register_callbacks(self):
+#         self.router.callback_query(F.data == "question")(self.question)
+#         self.router.message(SupportStates.Question)(self.answer_question)
+#         self.router.message(Command('reply'))(self.admin_reply)
+#
+#     async def question(self, callback: CallbackQuery, state: FSMContext):
+#         message = await callback.message.edit_media(
+#             media=InputMediaPhoto(media=FSInputFile(support_menu_text()[1]), caption='<b>Напишите свой вопрос:</b>'),
+#             reply_markup=BackToMenu
+#         )
+#         await state.update_data(message_id=message.message_id)
+#         await state.set_state(SupportStates.Question)
+#
+#     async def answer_question(self, message: Message, state: FSMContext):
+#         user_telegram_id, user_question = message.from_user.id, message.text
+#
+#         with Session() as session:
+#             support_message = Support(user_telegram_id=user_telegram_id, message_id=message.message_id,
+#                                       message_text=user_question)
+#             session.add(support_message)
+#             session.commit()
+#
+#         bot_message_id = (await state.get_data()).get('message_id')
+#         await message.bot.send_message(
+#             self.admin_id,
+#             f"ID вопроса: {message.message_id}\nВопрос от {message.from_user.full_name} ({user_telegram_id}):\n{user_question}\n\nДля ответа используйте /reply 'ID вопроса' 'ваш ответ'"
+#         )
+#         await state.clear()
+#         await message.bot.edit_message_text(chat_id=message.chat.id, message_id=bot_message_id,
+#                                             text="Ваш вопрос был отправлен администратору", reply_markup=BackToMenu)
+#
+#     async def admin_reply(self, message: Message):
+#         if message.from_user.id != self.admin_id:
+#             return
+#
+#         try:
+#             _, message_id, reply_text = message.text.split(maxsplit=2)
+#             message_id = int(message_id)
+#         except (IndexError, ValueError):
+#             await message.reply("Используйте правильный формат команды: /reply 'ID вопроса' 'ваш ответ'")
+#             return
+#
+#         with Session() as session:
+#             question = session.query(Support).filter_by(message_id=message_id).first()
+#             if question:
+#                 await message.bot.send_message(question.user_telegram_id,
+#                                                f"Ваш вопрос: {question.message_text}\n\nОтвет администратора: {reply_text}")
+#                 question.message_status = "Answered"
+#                 session.commit()
+#
+#         await message.reply("Ваш ответ доставлен пользователю!")
+
+
+
+
+
 MainMenuCallbackHandler = MainMenuCallback(router_callback)
 PersonalAccountCallbackHandler = PersonalAccountCallback(router_callback)
+# SupportCallbackHandler = SupportCallback(router=Router, admin_id=593764558)

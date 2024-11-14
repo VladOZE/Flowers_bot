@@ -1,2 +1,5 @@
 .venv/
+venv/
 .idea/
+src/config/database.env
+src/config/bot.env

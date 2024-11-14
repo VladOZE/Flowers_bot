@@ -62,6 +62,8 @@ class Customer(Base):
     amount_orders = Column(INTEGER(unsigned=True), nullable=False, default=0)
     mailing = Column(TINYINT(unsigned=True), default=1)
 
+    support_messages = relationship("Support", back_populates="customer")
+
 
 class Order(Base):
     __tablename__ = 'orders'
@@ -123,3 +125,17 @@ class Delivery(Base):
     tracking_number = Column(String(100), default=None)
 
     order = relationship("Order", back_populates="delivery")
+
+
+class Support(Base):
+    __tablename__ = "support"
+
+    id = Column(INTEGER(unsigned=True), primary_key=True, nullable=False, autoincrement=True)
+    customer_telegram_id = Column(INTEGER(unsigned=True), ForeignKey('customers.customer_telegram_id'), nullable=False)
+    message_id = Column(INTEGER(unsigned=True), nullable=False)
+    message_text = Column(Text, nullable=False)
+    admin_answer = Column(Text, default=None)
+    message_status = Column(TINYINT, default=False)
+
+    customer = relationship("Customer", back_populates="support_messages")
+
