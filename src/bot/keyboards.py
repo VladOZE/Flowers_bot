@@ -38,10 +38,10 @@ CatalogMenu = InlineKeyboardMarkup(
 SupportMenu = InlineKeyboardMarkup(
     inline_keyboard=[
         [
-            InlineKeyboardButton(text='Связаться с оператором', callback_data='flowers')
+            InlineKeyboardButton(text='Связаться с оператором', callback_data='call_operator')
         ],
         [
-            InlineKeyboardButton(text='Заполнить форму обратной связи', callback_data='bouquets')
+            InlineKeyboardButton(text='Заполнить форму обратной связи', callback_data='feedback_form')
         ],
         [
             InlineKeyboardButton(text='Назад в меню', callback_data='back_to_menu')
@@ -71,6 +71,15 @@ BackToMenu = InlineKeyboardMarkup(
     inline_keyboard=[
         [
             InlineKeyboardButton(text='Назад в меню', callback_data='back_to_menu')
+        ]
+    ]
+)
+
+
+BackToMenuFromText = InlineKeyboardMarkup(
+    inline_keyboard=[
+        [
+            InlineKeyboardButton(text='Назад в меню', callback_data='back_to_menu_from_text')
         ]
     ]
 )

@@ -1,5 +1,6 @@
 from src.database.database_base import Session
 from src.database.models import *
+from sqlalchemy.orm import joinedload
 
 
 def get_customer(customer_telegram_id: int) -> Customer:
@@ -30,3 +31,49 @@ def get_customer_mailing(customer_telegram_id: int) -> int:
         mailing_status = session.query(Customer.mailing).filter(Customer.customer_telegram_id == customer_telegram_id).first()
         session.close()
         return mailing_status
+
+
+def create_ticket(customer_telegram_id: int) -> SupportTicket:
+    with Session() as session:
+        ticket = SupportTicket(customer_telegram_id=customer_telegram_id)
+        session.add(ticket)
+        session.commit()
+
+        ticket = session.query(SupportTicket).filter_by(ticket_id=ticket.ticket_id).first()
+        session.close()
+
+    return ticket
+
+
+def add_message_to_ticket(message_id: int, ticket_id: int, sender_type: str, text: str) -> SupportMessage:
+    message = SupportMessage(message_id=message_id, ticket_id=ticket_id, sender_type=sender_type, message_text=text)
+    with Session() as session:
+        session.add(message)
+        session.commit()
+        session.close()
+    return message
+
+
+def get_ticket_by_id(ticket_id: int) -> SupportTicket | None:
+    with Session() as session:
+        ticket = session.query(SupportTicket).options(joinedload(SupportTicket.messages)).filter(SupportTicket.ticket_id == ticket_id).first()
+        session.close()
+    return ticket
+
+
+def set_ticket_status_open(ticket_id: int) -> None:
+    with Session() as session:
+        ticket = session.query(SupportTicket).filter_by(ticket_id=ticket_id).first()
+        if ticket:
+            ticket.status = 'open'
+            session.commit()
+            session.close()
+
+
+def set_ticket_status_closed(ticket_id: int) -> None:
+    with Session() as session:
+        ticket = session.query(SupportTicket).filter_by(ticket_id=ticket_id).first()
+        if ticket:
+            ticket.status = 'closed'
+            session.commit()
+            session.close()

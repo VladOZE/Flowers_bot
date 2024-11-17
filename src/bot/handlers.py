@@ -1,4 +1,4 @@
-from aiogram import Router
+from aiogram import Router, F
 from aiogram.filters import CommandStart, Command
 from aiogram.types import Message, InputMediaPhoto, FSInputFile, InputFile
 
@@ -26,8 +26,8 @@ async def faq(message: Message) -> None:
     await message.answer('Что может этот бот:')
 
 
-@router_handler.message()
-async def unknown(message: Message) -> None:
-    user = message.from_user
-    add_customer(user.id, user.first_name)
-    await message.answer(text='К сожалению, я вас не понял', reply_markup=BackToMenu)
+# @router_handler.message(~F.state)
+# async def unknown(message: Message) -> None:
+#     user = message.from_user
+#     add_customer(user.id, user.first_name)
+#     await message.answer(text='К сожалению, я вас не понял', reply_markup=BackToMenu)

@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, Text, Enum, ForeignKey, DECIMAL, TIMESTAMP, DATE
+from sqlalchemy import Column, Integer, String, Text, Enum, ForeignKey, DECIMAL, TIMESTAMP, DATE, func
 from sqlalchemy.dialects.mysql import INTEGER, TINYINT, BIGINT
 from sqlalchemy.orm import relationship
 import enum
@@ -34,6 +34,16 @@ class OrderStatusEnum(enum.Enum):
     pending = "pending"
     completed = "completed"
     cancelled = "cancelled"
+
+
+class SupportSenderType(enum.Enum):
+    user = "user"
+    admin = "admin"
+
+
+class SupportStatus(enum.Enum):
+    open = "open"
+    closed = "closed"
 
 
 class Product(Base):
@@ -123,3 +133,27 @@ class Delivery(Base):
     tracking_number = Column(String(100), default=None)
 
     order = relationship("Order", back_populates="delivery")
+
+
+class SupportTicket(Base):
+    __tablename__ = 'support_tickets'
+
+    ticket_id = Column(BIGINT(unsigned=True), primary_key=True, nullable=False, autoincrement=True)
+    customer_telegram_id = Column(BIGINT(unsigned=True), nullable=False)
+    status = Column(Enum(SupportStatus), nullable=False, default='open')
+    created_at = Column(TIMESTAMP, default=func.now(), nullable=False)
+    updated_at = Column(TIMESTAMP, default=func.now(), onupdate=func.now(), nullable=False)
+
+    messages = relationship("SupportMessage", back_populates="ticket")
+
+
+class SupportMessage(Base):
+    __tablename__ = 'support_messages'
+
+    message_id = Column(BIGINT(unsigned=True), primary_key=True, nullable=False, autoincrement=True)
+    ticket_id = Column(BIGINT(unsigned=True), ForeignKey('support_tickets.ticket_id'), nullable=False)
+    sender_type = Column(Enum(SupportSenderType), nullable=False)
+    message_text = Column(Text, nullable=False)
+    created_at = Column(TIMESTAMP, default=func.now(), nullable=False)
+
+    ticket = relationship("SupportTicket", back_populates="messages")
