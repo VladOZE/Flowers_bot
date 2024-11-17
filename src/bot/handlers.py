@@ -4,6 +4,7 @@ from aiogram.types import Message, InputMediaPhoto, FSInputFile, InputFile
 
 from src.bot.keyboards import *
 from src.bot.functions import *
+from src.bot.quaries import add_customer
 
 
 router_handler = Router()

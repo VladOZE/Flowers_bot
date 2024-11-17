@@ -2,6 +2,7 @@ from aiogram.types import CallbackQuery, FSInputFile, InputMediaPhoto
 from aiogram import Router, F
 from functions import *
 from keyboards import *
+from quaries import *
 
 
 router_callback = Router()

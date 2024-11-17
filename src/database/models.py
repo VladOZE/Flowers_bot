@@ -1,5 +1,5 @@
 from sqlalchemy import Column, Integer, String, Text, Enum, ForeignKey, DECIMAL, TIMESTAMP, DATE
-from sqlalchemy.dialects.mysql import INTEGER, TINYINT
+from sqlalchemy.dialects.mysql import INTEGER, TINYINT, BIGINT
 from sqlalchemy.orm import relationship
 import enum
 from src.database.database_base import Base
@@ -53,7 +53,7 @@ class Customer(Base):
     __tablename__ = 'customers'
 
     customer_id = Column(INTEGER(unsigned=True), primary_key=True, nullable=False, autoincrement=True)
-    customer_telegram_id = Column(INTEGER(unsigned=True), unique=True, nullable=False)
+    customer_telegram_id = Column(BIGINT(unsigned=True), unique=True, nullable=False)
     first_name = Column(String(100), nullable=False)
     last_name = Column(String(100), default=None)
     patronymic = Column(String(100), default=None)

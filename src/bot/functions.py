@@ -1,7 +1,6 @@
 from typing import Tuple, List
 from aiogram import Bot
 from aiogram.types import BotCommand, InlineKeyboardMarkup, InlineKeyboardButton, BotCommandScopeDefault
-from src.database.database_base import Session
 from src.database.models import *
 import os
 
@@ -55,26 +54,6 @@ def personal_account_menu_text() -> Tuple[str, str]:
     return personal_account_text, personal_account_photo_path
 
 
-def customer_in_db(user_telegram_id: int) -> bool:
-    with Session() as session:
-        customer = session.query(Customer).filter(Customer.customer_telegram_id == user_telegram_id).first()
-        if customer:
-            session.close()
-            return True
-        session.close()
-        return False
-
-
-def add_customer(user_telegram_id: int, first_name: str) -> None:
-    if not customer_in_db(user_telegram_id):
-        new_customer = Customer(customer_telegram_id=user_telegram_id,
-                                first_name=first_name, amount_orders=0)
-        with Session() as session:
-            session.add(new_customer)
-            session.commit()
-            session.close()
-
-
 def create_examples_gallery() -> List[str]:
     path = "../images/examples/"
     gallery = sorted(
@@ -110,11 +89,6 @@ def create_keyboard_for_gallery(index: int) -> InlineKeyboardMarkup:
 # Здесь заканчивается блок кода с функциями для класса MainMenuCallback
 
 # Отсюда начинается блок кода с функциями для класса PersonalAccountCallback
-def get_customer_mailing(user_telegram_id: int) -> int:
-    session = Session()
-    mailing_status = session.query(Customer.mailing).filter(Customer.customer_telegram_id == user_telegram_id).first()
-    session.close()
-    return mailing_status
 
 # Здесь заканчивается блок кода с функциями для класса PersonalAccountCallback
 async def set_commands(bot: Bot) -> None:
