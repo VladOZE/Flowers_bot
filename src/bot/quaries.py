@@ -1,6 +1,7 @@
 from src.database.database_base import Session
 from src.database.models import *
 from sqlalchemy.orm import joinedload
+from typing import List
 
 
 def get_customer(customer_telegram_id: int) -> Customer:
@@ -31,6 +32,14 @@ def get_customer_mailing(customer_telegram_id: int) -> int:
         mailing_status = session.query(Customer.mailing).filter(Customer.customer_telegram_id == customer_telegram_id).first()
         session.close()
         return mailing_status
+
+
+def get_customer_tickets(customer_telegram_id: int) -> List[SupportTicket]:
+    with Session() as session:
+        customer_tickets = session.query(SupportTicket).filter(Customer.customer_telegram_id == customer_telegram_id).all()
+        session.close()
+        print(customer_tickets)
+        return customer_tickets
 
 
 def create_ticket(customer_telegram_id: int) -> SupportTicket:
@@ -77,3 +86,15 @@ def set_ticket_status_closed(ticket_id: int) -> None:
             ticket.status = 'closed'
             session.commit()
             session.close()
+
+
+def get_customer_tickets(customer_id: int, status: str) -> list[SupportTicket]:
+    with Session() as session:
+        tickets = (
+            session.query(SupportTicket)
+            .filter_by(customer_telegram_id=customer_id, status=status.lower())
+            .order_by(SupportTicket.ticket_id.asc())
+            .all()
+        )
+    session.close()
+    return tickets

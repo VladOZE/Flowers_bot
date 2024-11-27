@@ -84,6 +84,7 @@ class PersonalAccountCallback:
     def register_callbacks(self):
         self.router.callback_query(F.data == "mailing")(self.mailing)
         self.router.callback_query(F.data.startswith("mailing:"))(self.turn_mailing)
+        self.router.callback_query(F.data == "appeals")(self.appeals)
 
     async def mailing(self, callback: CallbackQuery):
         text, path = personal_account_menu_text()
@@ -127,6 +128,18 @@ class PersonalAccountCallback:
         session.close()
         await callback.message.edit_media(media=photo, reply_markup=BackToMenu)
 
+    async def appeals(self, callback: CallbackQuery):
+        user = callback.from_user
+        _, path = personal_account_menu_text()
+        keyboard = InlineKeyboardMarkup(inline_keyboard=[
+            [InlineKeyboardButton(text="Посмотреть открытые обращения", callback_data=f"open_appeals_{user.id}")],
+            [InlineKeyboardButton(text="Посмотреть закрытые обращения", callback_data=f"closed_appeals_{user.id}")],
+            [InlineKeyboardButton(text="Назад в главное меню", callback_data="back_to_menu")]
+        ])
+        caption = 'Выберете какой тип обращений вы хотите посмотреть!'
+        photo = InputMediaPhoto(media=FSInputFile(path), caption=caption)
+        await callback.message.edit_media(media=photo, reply_markup=keyboard)
+
 
 class SupportCallback:
     def __init__(self, router: Router, admin_id: int):
@@ -140,6 +153,9 @@ class SupportCallback:
         self.router.message(Command('reply'))(self.admin_reply)
         self.router.callback_query(F.data.startswith("close_"))(self.close_ticket)
         self.router.callback_query(F.data.startswith("add_"))(self.add_text_ticket)
+        self.router.message(SupportStates.AddMessage)(self.handle_ticket_message)
+        self.router.callback_query(F.data.startswith("open_appeals_"))(self.show_open_appeals)
+        self.router.callback_query(F.data.startswith("closed_appeals_"))(self.show_closed_appeals)
     #    self.router.callback_query(F.data.startswith("feedback_form"))(self.feedback_form)
 
     async def call_operator(self, callback: CallbackQuery, state: FSMContext):
@@ -229,8 +245,99 @@ class SupportCallback:
             set_ticket_status_closed(ticket_id)
         await callback.message.edit_text('Обращение успешно закрыто!', reply_markup=BackToMenuFromText)
 
-    async def add_text_ticket(self, callback: CallbackQuery):
-        pass
+    async def add_text_ticket(self, callback: CallbackQuery, state: FSMContext):
+        data = callback.data.split("_")
+        ticket_id = int(data[1])
+        customer_id = int(data[2])
+
+        ticket = get_ticket_by_id(ticket_id)
+        if not ticket:
+            await callback.message.edit_text("Обращение не найдено.", reply_markup=BackToMenuFromText)
+            return
+
+        if ticket.status == "closed":
+            await callback.message.edit_text("Обращение уже закрыто, вы не можете дополнить его",
+                                             reply_markup=BackToMenuFromText)
+            return
+
+        message = await callback.message.edit_text("Напишите ваш новый вопрос или комментарий:", reply_markup=BackToMenuFromText)
+
+        await state.set_state(SupportStates.AddMessage)
+        await state.update_data(ticket_id=ticket_id, customer_id=customer_id, message_id=message.message_id)
+
+    async def handle_ticket_message(self, message: Message, state: FSMContext):
+        data = await state.get_data()
+        ticket_id = data.get("ticket_id")
+        customer_id = data.get("customer_id")
+        message_id = data.get("message_id")
+        await message.delete()
+
+        if not ticket_id or not customer_id:
+            await message.edit_text("Произошла ошибка. Попробуйте снова.", reply_markup=BackToMenuFromText)
+            await state.clear()
+            return
+
+        new_message = add_message_to_ticket(
+            message_id=message.message_id,
+            ticket_id=ticket_id,
+            sender_type="user",
+            text=message.text,
+        )
+
+        admin_text = (
+            f"Новое сообщение в тикете №{ticket_id} от пользователя {message.from_user.full_name}:\n"
+            f"{message.text}\n\n"
+            f"Вы можете ответить командой: /reply ID тикета ваш ответ"
+        )
+        await message.bot.send_message(self.admin_id, admin_text)
+
+        await message.bot.edit_message_text(
+            chat_id=message.chat.id,
+            message_id=message_id,
+            text='Ваше сообщение успешно доставлено администратору!',
+            reply_markup=BackToMenuFromText)
+        await state.clear()
+
+    # async def feedback_form(self, callback: CallbackQuery):
+
+    async def show_open_appeals(self, callback: CallbackQuery):
+        customer_id = callback.from_user.id
+        _, path = main_menu_text()
+
+        tickets = get_customer_tickets(customer_id, 'open')
+
+        if not tickets:
+            caption = "У вас нет открытых обращений."
+            photo = InputMediaPhoto(media=FSInputFile(path), caption=caption)
+            await callback.message.edit_media(media=photo, reply_markup=BackToMenu)
+            return
+
+        caption = "Ваши открытые обращения:\n\n"
+        keyboard = []
+
+        buttons = [
+            InlineKeyboardButton(
+                text=f"Открыть №{ticket.ticket_id}",
+                callback_data=f"view_ticket_{ticket.ticket_id}"
+            )
+            for ticket in tickets
+        ]
+
+        for i in range(0, len(buttons), 3):
+            keyboard.append(buttons[i:i + 3])
+
+        keyboard.append(
+            [InlineKeyboardButton(text="Назад в главное меню", callback_data="back_to_menu")]
+        )
+
+        reply_markup = InlineKeyboardMarkup(inline_keyboard=keyboard)
+        photo = InputMediaPhoto(media=FSInputFile(path), caption=caption)
+        await callback.message.edit_media(media=photo, reply_markup=reply_markup)
+
+
+    async def show_closed_appeals(self, callback: CallbackQuery):
+        customer_id = callback.from_user.id
+        tickets = get_customer_tickets(customer_id, 'closed')
 
 
 MainMenuCallbackHandler = MainMenuCallback(router_callback)
