@@ -340,6 +340,72 @@ class SupportCallback:
         tickets = get_customer_tickets(customer_id, 'closed')
 
 
+class CatalogCallback:
+    def __init__(self, router: Router):
+        self.router = router
+        self.register_callbacks()
+
+    def register_callbacks(self):
+        self.router.callback_query(F.data == "back_to_catalog")(self.back_to_catalog)
+        self.router.callback_query(F.data == "flowers")(self.flowers)
+        self.router.callback_query(F.data.startswith("flowers_prev_page_"))(self.flowers_prev_page)
+        self.router.callback_query(F.data.startswith("flowers_next_page_"))(self.flowers_next_page)
+        self.router.callback_query(F.data == "bouquets")(self.bouquets)
+        self.router.callback_query(F.data == "toys")(self.toys)
+        self.router.callback_query(F.data == "personal_order")(self.personal_order)
+        self.router.callback_query(F.data == "shopping_cart")(self.shopping_cart)
+
+    async def back_to_catalog(self, callback:CallbackQuery):
+        text, path = catalog_menu_text()
+        photo = InputMediaPhoto(media=FSInputFile(path), caption=text)
+        await callback.message.edit_media(photo, reply_markup=CatalogMenu)
+
+    async def flowers(self, callback: CallbackQuery):
+        _, path = catalog_menu_text()
+        flowers = get_flowers_list()
+        if not flowers:
+            caption = "Нет доступных цветов."
+            photo = InputMediaPhoto(media=FSInputFile(path), caption=caption)
+            await callback.message.edit_media(media=photo, reply_markup=BackToMenu)
+            return
+
+        flowers_list = create_flowers_list(flowers)
+        keyboard = create_flowers_keyboard(page_num=1, flowers=flowers)
+
+        caption = f"Доступные цветы:\n\n{flowers_list}"
+        photo = InputMediaPhoto(media=FSInputFile(path), caption=caption)
+        await callback.message.edit_media(media=photo, reply_markup=keyboard)
+
+    async def flowers_next_page(self, callback: CallbackQuery):
+        page_num = int(callback.data.split('_')[-1])
+        flowers = get_flowers_list()
+
+        keyboard = create_flowers_keyboard(page_num=page_num, flowers=flowers)
+        await callback.message.edit_reply_markup(reply_markup=keyboard)
+        await callback.answer()
+
+    async def flowers_prev_page(self, callback: CallbackQuery):
+        page_num = int(callback.data.split('_')[-1])
+        flowers = get_flowers_list()
+
+        keyboard = create_flowers_keyboard(page_num=page_num, flowers=flowers)
+        await callback.message.edit_reply_markup(reply_markup=keyboard)
+        await callback.answer()
+
+    async def bouquets(self, callback: CallbackQuery):
+        return
+
+    async def toys(self, callback: CallbackQuery):
+        return
+
+    async def personal_order(self, callback: CallbackQuery):
+        return
+
+    async def shopping_cart(self, callback: CallbackQuery):
+        return
+
+
 MainMenuCallbackHandler = MainMenuCallback(router_callback)
 PersonalAccountCallbackHandler = PersonalAccountCallback(router_callback)
 SupportCallbackHandler = SupportCallback(router_callback, 5273759076)
+CatalogCallbackHandler = CatalogCallback(router_callback)

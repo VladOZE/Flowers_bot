@@ -91,6 +91,48 @@ def create_keyboard_for_gallery(index: int) -> InlineKeyboardMarkup:
 # Отсюда начинается блок кода с функциями для класса PersonalAccountCallback
 
 # Здесь заканчивается блок кода с функциями для класса PersonalAccountCallback
+
+
+# Здесь заканчивается блок кода с функциями для класса CatalogCallback
+def create_flowers_keyboard(page_num: int, flowers: List[Product]) -> InlineKeyboardMarkup:
+    max_buttons = 15
+    buttons_per_row = 4
+
+    start_index = (page_num - 1) * max_buttons
+    end_index = start_index + max_buttons
+    flowers_to_display = flowers[start_index:end_index]
+
+    keyboard = []
+    for i in range(0, len(flowers_to_display), buttons_per_row):
+        row = [
+            InlineKeyboardButton(
+                text=f"{j + 1 + start_index}",
+                callback_data=f"flower_{flowers_to_display[j].product_id}"
+            )
+            for j in range(i, min(i + buttons_per_row, len(flowers_to_display)))
+        ]
+        keyboard.append(row)
+
+    navigation_row = []
+    if start_index > 0:
+        navigation_row.append(InlineKeyboardButton(text='<-', callback_data=f'flowers_prev_page_{page_num - 1}'))
+    if end_index < len(flowers):
+        navigation_row.append(InlineKeyboardButton(text='->', callback_data=f'flowers_next_page_{page_num + 1}'))
+
+    if navigation_row:
+        keyboard.append(navigation_row)
+
+    keyboard.append([InlineKeyboardButton(text='Назад в каталог', callback_data='back_to_catalog')])
+
+    return InlineKeyboardMarkup(inline_keyboard=keyboard)
+
+
+def create_flowers_list(flowers: List[Product]) -> str:
+    return "\n".join([f"{i + 1} - {flower.name}" for i, flower in enumerate(flowers)])
+
+# Здесь заканчивается блок кода с функциями для класса CatalogCallback
+
+
 async def set_commands(bot: Bot) -> None:
     commands = [
         BotCommand(command="/start", description="Вызвать главное меню"),

@@ -29,6 +29,9 @@ CatalogMenu = InlineKeyboardMarkup(
             InlineKeyboardButton(text='Персональный заказ', callback_data='personal_order')
         ],
         [
+            InlineKeyboardButton(text='Корзина', callback_data='shopping_cart'),
+        ],
+        [
             InlineKeyboardButton(text='Назад в меню', callback_data='back_to_menu')
         ]
     ]

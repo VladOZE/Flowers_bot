@@ -88,7 +88,7 @@ def set_ticket_status_closed(ticket_id: int) -> None:
             session.close()
 
 
-def get_customer_tickets(customer_id: int, status: str) -> list[SupportTicket]:
+def get_customer_tickets(customer_id: int, status: str) -> List[SupportTicket]:
     with Session() as session:
         tickets = (
             session.query(SupportTicket)
@@ -98,3 +98,15 @@ def get_customer_tickets(customer_id: int, status: str) -> list[SupportTicket]:
         )
     session.close()
     return tickets
+
+
+def get_flowers_list() -> List[Product]:
+    with Session() as session:
+        flowers = (
+            session.query(Product)
+            .filter_by(product_type='flower')
+            .order_by(Product.product_id.asc())
+            .all()
+        )
+    session.close()
+    return flowers
