@@ -96,14 +96,14 @@ class PersonalAccountCallback:
             photo = InputMediaPhoto(media=FSInputFile(path), caption=caption)
             keyboard = InlineKeyboardMarkup(inline_keyboard=[
                 [InlineKeyboardButton(text="Выключить рассылку", callback_data=f"mailing:{user.id}:off")],
-                [InlineKeyboardButton(text="Главное меню", callback_data="back_to_menu")]
+                [InlineKeyboardButton(text="Назад в личный кабинет", callback_data="personal_account")]
             ])
         else:
             caption = 'У вас выключена рассылка, желаете ее включить?'
             photo = InputMediaPhoto(media=FSInputFile(path), caption=caption)
             keyboard = InlineKeyboardMarkup(inline_keyboard=[
                 [InlineKeyboardButton(text="Включить рассылку", callback_data=f"mailing:{user.id}:on")],
-                [InlineKeyboardButton(text="Главное меню", callback_data="back_to_menu")]
+                [InlineKeyboardButton(text="Назад в личный кабинет", callback_data="personal_account")]
             ])
         await callback.message.edit_media(media=photo, reply_markup=keyboard)
 
@@ -134,7 +134,7 @@ class PersonalAccountCallback:
         keyboard = InlineKeyboardMarkup(inline_keyboard=[
             [InlineKeyboardButton(text="Посмотреть открытые обращения", callback_data=f"open_appeals_{user.id}")],
             [InlineKeyboardButton(text="Посмотреть закрытые обращения", callback_data=f"closed_appeals_{user.id}")],
-            [InlineKeyboardButton(text="Назад в главное меню", callback_data="back_to_menu")]
+            [InlineKeyboardButton(text="Назад в личный кабинет", callback_data="personal_account")]
         ])
         caption = 'Выберете какой тип обращений вы хотите посмотреть!'
         photo = InputMediaPhoto(media=FSInputFile(path), caption=caption)
@@ -326,13 +326,12 @@ class SupportCallback:
             keyboard.append(buttons[i:i + 3])
 
         keyboard.append(
-            [InlineKeyboardButton(text="Назад в главное меню", callback_data="back_to_menu")]
+            [InlineKeyboardButton(text="Назад в личный кабинет", callback_data="personal_account")]
         )
 
         reply_markup = InlineKeyboardMarkup(inline_keyboard=keyboard)
         photo = InputMediaPhoto(media=FSInputFile(path), caption=caption)
         await callback.message.edit_media(media=photo, reply_markup=reply_markup)
-
 
     async def show_closed_appeals(self, callback: CallbackQuery):
         customer_id = callback.from_user.id
@@ -361,7 +360,7 @@ class SupportCallback:
             keyboard.append(buttons[i:i + 3])
 
         keyboard.append(
-            [InlineKeyboardButton(text="Назад в главное меню", callback_data="back_to_menu")]
+            [InlineKeyboardButton(text="Назад в личный кабинет", callback_data="personal_account")]
         )
 
         reply_markup = InlineKeyboardMarkup(inline_keyboard=keyboard)
@@ -477,7 +476,7 @@ class CatalogCallback:
             _, path = catalog_menu_text()
             photo = InputMediaPhoto(media=FSInputFile(path), caption=caption)
 
-        await callback.message.edit_media(media=photo, reply_markup=create_product_keyboard(product_id))
+        await callback.message.edit_media(media=photo, reply_markup=create_product_keyboard(product_id, product.product_type))
 
 
 MainMenuCallbackHandler = MainMenuCallback(router_callback)

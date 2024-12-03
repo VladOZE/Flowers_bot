@@ -131,11 +131,11 @@ def create_products_list(products: List[Product]) -> str:
 def create_flowers_list(flowers: List[Product]) -> str:
     return "\n".join([f"{i + 1} - {flower.name}" for i, flower in enumerate(flowers)])
 
-def create_product_keyboard(product_id: int):
+def create_product_keyboard(product_id: int, product_type: str):
     return InlineKeyboardMarkup(
         inline_keyboard=[
             [InlineKeyboardButton(text="Добавить в корзину", callback_data=f"add_to_cart_{product_id}")],
-            [InlineKeyboardButton(text="Назад", callback_data="back_to_catalog")],
+            [InlineKeyboardButton(text="Назад к выбору", callback_data=f"{product_type.name}s")],
         ]
     )
 
