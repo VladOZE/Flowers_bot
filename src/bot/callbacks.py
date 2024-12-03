@@ -156,6 +156,7 @@ class SupportCallback:
         self.router.message(SupportStates.AddMessage)(self.handle_ticket_message)
         self.router.callback_query(F.data.startswith("open_appeals_"))(self.show_open_appeals)
         self.router.callback_query(F.data.startswith("closed_appeals_"))(self.show_closed_appeals)
+    #    self.router.callback_query(F.data.startswith("view_ticket_"))(self.view_ticket)
     #    self.router.callback_query(F.data.startswith("feedback_form"))(self.feedback_form)
 
     async def call_operator(self, callback: CallbackQuery, state: FSMContext):
@@ -298,8 +299,6 @@ class SupportCallback:
             reply_markup=BackToMenuFromText)
         await state.clear()
 
-    # async def feedback_form(self, callback: CallbackQuery):
-
     async def show_open_appeals(self, callback: CallbackQuery):
         customer_id = callback.from_user.id
         _, path = main_menu_text()
@@ -337,7 +336,42 @@ class SupportCallback:
 
     async def show_closed_appeals(self, callback: CallbackQuery):
         customer_id = callback.from_user.id
+        _, path = main_menu_text()
+
         tickets = get_customer_tickets(customer_id, 'closed')
+
+        if not tickets:
+            caption = "У вас нет закрытых обращений."
+            photo = InputMediaPhoto(media=FSInputFile(path), caption=caption)
+            await callback.message.edit_media(media=photo, reply_markup=BackToMenu)
+            return
+
+        caption = "Ваши закрытые обращения:\n\n"
+        keyboard = []
+
+        buttons = [
+            InlineKeyboardButton(
+                text=f"Открыть №{ticket.ticket_id}",
+                callback_data=f"view_ticket_{ticket.ticket_id}"
+            )
+            for ticket in tickets
+        ]
+
+        for i in range(0, len(buttons), 3):
+            keyboard.append(buttons[i:i + 3])
+
+        keyboard.append(
+            [InlineKeyboardButton(text="Назад в главное меню", callback_data="back_to_menu")]
+        )
+
+        reply_markup = InlineKeyboardMarkup(inline_keyboard=keyboard)
+        photo = InputMediaPhoto(media=FSInputFile(path), caption=caption)
+        await callback.message.edit_media(media=photo, reply_markup=reply_markup)
+
+    # async def view_ticket(self, callback: CallbackQuery):
+
+    # async def feedback_form(self, callback: CallbackQuery):
+
 
 
 class CatalogCallback:
@@ -347,62 +381,103 @@ class CatalogCallback:
 
     def register_callbacks(self):
         self.router.callback_query(F.data == "back_to_catalog")(self.back_to_catalog)
-        self.router.callback_query(F.data == "flowers")(self.flowers)
-        self.router.callback_query(F.data.startswith("flowers_prev_page_"))(self.flowers_prev_page)
-        self.router.callback_query(F.data.startswith("flowers_next_page_"))(self.flowers_next_page)
-        self.router.callback_query(F.data == "bouquets")(self.bouquets)
-        self.router.callback_query(F.data == "toys")(self.toys)
-        self.router.callback_query(F.data == "personal_order")(self.personal_order)
-        self.router.callback_query(F.data == "shopping_cart")(self.shopping_cart)
+        self.router.callback_query(F.data == "flowers")(self.handle_flowers)
+        self.router.callback_query(F.data == "bouquets")(self.handle_bouquets)
+        self.router.callback_query(F.data == "toys")(self.handle_toys)
+        self.router.callback_query(F.data.startswith("flowers_prev_page_"))(self.handle_flowers_prev_page)
+        self.router.callback_query(F.data.startswith("flowers_next_page_"))(self.handle_flowers_next_page)
+        self.router.callback_query(F.data.startswith("bouquets_prev_page_"))(self.handle_bouquets_prev_page)
+        self.router.callback_query(F.data.startswith("bouquets_next_page_"))(self.handle_bouquets_next_page)
+        self.router.callback_query(F.data.startswith("toys_prev_page_"))(self.handle_toys_prev_page)
+        self.router.callback_query(F.data.startswith("toys_next_page_"))(self.handle_toys_next_page)
+        self.router.callback_query(F.data.startswith("view_product_"))(self.view_product)
+
 
     async def back_to_catalog(self, callback:CallbackQuery):
         text, path = catalog_menu_text()
         photo = InputMediaPhoto(media=FSInputFile(path), caption=text)
         await callback.message.edit_media(photo, reply_markup=CatalogMenu)
 
-    async def flowers(self, callback: CallbackQuery):
+    async def products(self, callback: CallbackQuery, product_type: str):
         _, path = catalog_menu_text()
-        flowers = get_flowers_list()
-        if not flowers:
-            caption = "Нет доступных цветов."
+        products = get_products_list(product_type)
+        if not products:
+            caption = "К сожалению на данный момент каталог пуст"
             photo = InputMediaPhoto(media=FSInputFile(path), caption=caption)
-            await callback.message.edit_media(media=photo, reply_markup=BackToMenu)
+            await callback.message.edit_media(media=photo, reply_markup=BackToCatalog)
             return
 
-        flowers_list = create_flowers_list(flowers)
-        keyboard = create_flowers_keyboard(page_num=1, flowers=flowers)
+        products_list = create_products_list(products)
+        keyboard = create_products_keyboard(page_num=1, products=products, product_type=product_type)
 
-        caption = f"Доступные цветы:\n\n{flowers_list}"
+        caption = products_list
         photo = InputMediaPhoto(media=FSInputFile(path), caption=caption)
         await callback.message.edit_media(media=photo, reply_markup=keyboard)
 
-    async def flowers_next_page(self, callback: CallbackQuery):
+    async def products_next_page(self, callback: CallbackQuery, product_type: str):
         page_num = int(callback.data.split('_')[-1])
-        flowers = get_flowers_list()
+        products = get_products_list(product_type)
 
-        keyboard = create_flowers_keyboard(page_num=page_num, flowers=flowers)
+        keyboard = create_products_keyboard(page_num=page_num, products=products, product_type=product_type)
         await callback.message.edit_reply_markup(reply_markup=keyboard)
         await callback.answer()
 
-    async def flowers_prev_page(self, callback: CallbackQuery):
+    async def products_prev_page(self, callback: CallbackQuery, product_type: str):
         page_num = int(callback.data.split('_')[-1])
-        flowers = get_flowers_list()
+        products = get_products_list(product_type)
 
-        keyboard = create_flowers_keyboard(page_num=page_num, flowers=flowers)
+        keyboard = create_products_keyboard(page_num=page_num, products=products, product_type=product_type)
         await callback.message.edit_reply_markup(reply_markup=keyboard)
         await callback.answer()
 
-    async def bouquets(self, callback: CallbackQuery):
-        return
+    async def handle_flowers(self, callback: CallbackQuery):
+        await self.products(callback, product_type='flower')
 
-    async def toys(self, callback: CallbackQuery):
-        return
+    async def handle_bouquets(self, callback: CallbackQuery):
+        await self.products(callback, product_type='bouquet')
 
-    async def personal_order(self, callback: CallbackQuery):
-        return
+    async def handle_toys(self, callback: CallbackQuery):
+        await self.products(callback, product_type='toy')
 
-    async def shopping_cart(self, callback: CallbackQuery):
-        return
+    async def handle_flowers_next_page(self, callback: CallbackQuery):
+        await self.products_next_page(callback, product_type='flower')
+
+    async def handle_flowers_prev_page(self, callback: CallbackQuery):
+        await self.products_prev_page(callback, product_type='flower')
+
+    async def handle_bouquets_next_page(self, callback: CallbackQuery):
+        await self.products_next_page(callback, product_type='bouquet')
+
+    async def handle_bouquets_prev_page(self, callback: CallbackQuery):
+        await self.products_prev_page(callback, product_type='bouquet')
+
+    async def handle_toys_next_page(self, callback: CallbackQuery):
+        await self.products_next_page(callback, product_type='toy')
+
+    async def handle_toys_prev_page(self, callback: CallbackQuery):
+        await self.products_prev_page(callback, product_type='toy')
+
+    async def view_product(self, callback: CallbackQuery):
+        product_id = int(callback.data.split('_')[-1])
+
+        product = get_product_by_id(product_id)
+        if not product:
+            await callback.answer("Товар не найден.")
+            return
+
+        if product.description:
+            caption = f"Название: {product.name}\n\n{product.description}\n\nЦена: {product.price} ₽"
+        else:
+            caption = f"Название: {product.name}\n\nЦена: {product.price} ₽"
+
+        if product.image_url:
+            photo = InputMediaPhoto(media=product.image_url, caption=caption)
+        else:
+            # Тут надо будет заменить изображение
+            _, path = catalog_menu_text()
+            photo = InputMediaPhoto(media=FSInputFile(path), caption=caption)
+
+        await callback.message.edit_media(media=photo, reply_markup=create_product_keyboard(product_id))
 
 
 MainMenuCallbackHandler = MainMenuCallback(router_callback)

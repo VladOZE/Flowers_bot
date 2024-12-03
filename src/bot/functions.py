@@ -92,33 +92,32 @@ def create_keyboard_for_gallery(index: int) -> InlineKeyboardMarkup:
 
 # Здесь заканчивается блок кода с функциями для класса PersonalAccountCallback
 
+# Здесь Начинается блок кода с функциями для класса CatalogCallback
 
-# Здесь заканчивается блок кода с функциями для класса CatalogCallback
-def create_flowers_keyboard(page_num: int, flowers: List[Product]) -> InlineKeyboardMarkup:
+def create_products_keyboard(page_num: int, products: List[Product], product_type: str) -> InlineKeyboardMarkup:
     max_buttons = 15
-    buttons_per_row = 4
+    buttons_per_row = 4 if len(products) % 4 == 0 else 3
 
     start_index = (page_num - 1) * max_buttons
-    end_index = start_index + max_buttons
-    flowers_to_display = flowers[start_index:end_index]
+    end_index = min(start_index + max_buttons, len(products))
+    products_to_display = products[start_index:end_index]
 
     keyboard = []
-    for i in range(0, len(flowers_to_display), buttons_per_row):
+    for i in range(0, len(products_to_display), buttons_per_row):
         row = [
             InlineKeyboardButton(
-                text=f"{j + 1 + start_index}",
-                callback_data=f"flower_{flowers_to_display[j].product_id}"
+                text=str(j + 1 + start_index),
+                callback_data=f'view_product_{product_type}_{products_to_display[j].product_id}'
             )
-            for j in range(i, min(i + buttons_per_row, len(flowers_to_display)))
+            for j in range(i, min(i + buttons_per_row, len(products_to_display)))
         ]
         keyboard.append(row)
 
     navigation_row = []
-    if start_index > 0:
-        navigation_row.append(InlineKeyboardButton(text='<-', callback_data=f'flowers_prev_page_{page_num - 1}'))
-    if end_index < len(flowers):
-        navigation_row.append(InlineKeyboardButton(text='->', callback_data=f'flowers_next_page_{page_num + 1}'))
-
+    if page_num > 1:
+        navigation_row.append(InlineKeyboardButton(text='<-', callback_data=f'prev_page_{product_type}_{page_num - 1}'))
+    if end_index < len(products):
+        navigation_row.append(InlineKeyboardButton(text='->', callback_data=f'next_page_{product_type}_{page_num + 1}'))
     if navigation_row:
         keyboard.append(navigation_row)
 
@@ -126,9 +125,19 @@ def create_flowers_keyboard(page_num: int, flowers: List[Product]) -> InlineKeyb
 
     return InlineKeyboardMarkup(inline_keyboard=keyboard)
 
+def create_products_list(products: List[Product]) -> str:
+    return "\n".join([f"{i + 1}. {product.name}" for i, product in enumerate(products)])
 
 def create_flowers_list(flowers: List[Product]) -> str:
     return "\n".join([f"{i + 1} - {flower.name}" for i, flower in enumerate(flowers)])
+
+def create_product_keyboard(product_id: int):
+    return InlineKeyboardMarkup(
+        inline_keyboard=[
+            [InlineKeyboardButton(text="Добавить в корзину", callback_data=f"add_to_cart_{product_id}")],
+            [InlineKeyboardButton(text="Назад", callback_data="back_to_catalog")],
+        ]
+    )
 
 # Здесь заканчивается блок кода с функциями для класса CatalogCallback
 

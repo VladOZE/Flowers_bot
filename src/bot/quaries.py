@@ -110,3 +110,25 @@ def get_flowers_list() -> List[Product]:
         )
     session.close()
     return flowers
+
+
+def get_products_list(product_type: str) -> List[Product]:
+    with Session() as session:
+        products = (
+            session.query(Product)
+            .filter_by(product_type=product_type)
+            .order_by(Product.product_id.asc())
+            .all()
+        )
+    session.close()
+    return products
+
+
+def get_product_by_id(product_id: int) -> dict:
+    with Session() as session:
+        product = (
+            session.query(Product)
+            .filter_by(product_id=product_id).first()
+        )
+    session.close()
+    return product

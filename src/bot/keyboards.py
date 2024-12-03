@@ -86,3 +86,12 @@ BackToMenuFromText = InlineKeyboardMarkup(
         ]
     ]
 )
+
+
+BackToCatalog = InlineKeyboardMarkup(
+    inline_keyboard=[
+        [
+            InlineKeyboardButton(text='Назад в каталог', callback_data='back_to_catalog')
+        ]
+    ]
+)

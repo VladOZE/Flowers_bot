@@ -52,6 +52,7 @@ class Product(Base):
     product_id = Column(INTEGER(unsigned=True), primary_key=True, nullable=False, autoincrement=True)
     product_type = Column(Enum(ProductTypeEnum), nullable=False)
     name = Column(String(100), nullable=False)
+    price = Column(DECIMAL(10, 2), default=None)
     in_stock = Column(Integer, default=None)
     description = Column(Text, default=None)
     image_url = Column(String(255), default=None)
