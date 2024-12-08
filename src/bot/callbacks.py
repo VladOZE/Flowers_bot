@@ -1,11 +1,12 @@
-from aiogram.types import CallbackQuery, FSInputFile, InputMediaPhoto, Message, InlineKeyboardButton, InlineKeyboardMarkup
+from aiogram.types import CallbackQuery, FSInputFile, InputMediaPhoto, Message, InlineKeyboardButton, InlineKeyboardMarkup, InputFile
 from aiogram.filters import Command
 from aiogram import Router, F
 from functions import *
 from keyboards import *
 from quaries import *
-from states import SupportStates
+from states import SupportStates, PersonalOrderStates
 from aiogram.fsm.context import FSMContext
+import time
 
 
 router_callback = Router()
@@ -390,6 +391,11 @@ class CatalogCallback:
         self.router.callback_query(F.data.startswith("toys_prev_page_"))(self.handle_toys_prev_page)
         self.router.callback_query(F.data.startswith("toys_next_page_"))(self.handle_toys_next_page)
         self.router.callback_query(F.data.startswith("view_product_"))(self.view_product)
+        self.router.callback_query(F.data == "personal_order")(self.personal_order)
+        self.router.message(PersonalOrderStates.Description)(self.personal_order_description)
+        self.router.message(PersonalOrderStates.Photo)(self.personal_order_photo)
+        self.router.callback_query(F.data == "send_personal_order")(self.send_personal_order)
+        self.router.callback_query(F.data.startswith("back_to_catalog_personal_order_"))(self.back_to_catalog_personal_order)
 
 
     async def back_to_catalog(self, callback:CallbackQuery):
@@ -478,8 +484,138 @@ class CatalogCallback:
 
         await callback.message.edit_media(media=photo, reply_markup=create_product_keyboard(product_id, product.product_type))
 
+    async def personal_order(self, callback: CallbackQuery, state: FSMContext):
+        _, path = catalog_menu_text()
+        caption = (
+            'В этом разделе вы можете подробно описать, какой букет вы хотите.\n\n'
+            'Сначала напишите текст с описанием ваших пожеланий, например:\n\n'
+            '"Я хочу букет из 15 роз с красными лентами".\n\n'
+            'После этого вы сможете прикрепить фото или отправить заказ без фото.\n\n'
+            'Напишите текст в чат ниже, чтобы продолжить.'
+        )
+        photo = InputMediaPhoto(media=FSInputFile(path), caption=caption)
+
+        message = await callback.message.edit_media(photo, reply_markup=BackToCatalog)
+
+        await state.update_data(message_id=message.message_id)
+        await state.set_state(PersonalOrderStates.Description)
+
+    async def personal_order_description(self, message: Message, state: FSMContext):
+        await state.update_data(order_description=message.text)
+        await message.delete()
+
+        data = await state.get_data()
+        message_id = data.get("message_id")
+
+        order = create_personal_order(
+            telegram_id=message.from_user.id,
+            description=message.text,
+            photo_path=None,
+            status="accepted"
+        )
+
+        order_id = order.personal_order_id
+        await state.update_data(order_id=order_id)
+
+        keyboard = InlineKeyboardMarkup(
+            inline_keyboard=[
+                [InlineKeyboardButton(text="Отправить", callback_data="send_personal_order")],
+                [InlineKeyboardButton(text="Назад в каталог",
+                                      callback_data=f"back_to_catalog_personal_order_{order_id}")]
+            ]
+        )
+
+        await message.bot.edit_message_caption(
+            chat_id=message.chat.id,
+            message_id=message_id,
+            caption=(
+                'Ваше описание сохранено. Если вы хотите прикрепить фотографию, отправьте её сейчас.\n\n'
+                'Или нажмите кнопку "Отправить", чтобы завершить заказ без фото.'
+            ),
+            reply_markup=keyboard
+        )
+
+        await state.set_state(PersonalOrderStates.Photo)
+
+    async def personal_order_photo(self, message: Message, state: FSMContext):
+        path = '../images/personal_order/'
+
+        data = await state.get_data()
+        order_id = data.get("order_id")
+        message_id = data.get("message_id")
+
+        os.makedirs(path, exist_ok=True)
+
+        photo = message.photo[-1]
+
+        unique_filename = f"personal_order_{order_id}.jpg"
+        file_path = os.path.join(path, unique_filename)
+
+        await message.bot.download(file=photo, destination=file_path)
+
+        await state.update_data(photo_path=file_path)
+
+        keyboard = InlineKeyboardMarkup(
+            inline_keyboard=[
+        [InlineKeyboardButton(text="Отправить", callback_data="send_personal_order")],
+        [InlineKeyboardButton(text="Назад в каталог", callback_data=f"back_to_catalog_personal_order_{order_id}")]
+    ])
+
+        await message.delete()
+        await message.bot.edit_message_caption(
+            chat_id=message.chat.id,
+            message_id=message_id,
+            caption=("Ваше фото успешно сохранено! Нажмите 'Отправить', чтобы завершить заказ, или отмените его."),
+            reply_markup=keyboard)
+
+        await state.set_state(PersonalOrderStates.Confirmation)
+
+    async def send_personal_order(self, callback: CallbackQuery, state: FSMContext):
+        data = await state.get_data()
+        order_id = data.get("order_id")
+        order_description = data.get("order_description")
+        photo_path = data.get("photo_path")
+        message_id = data.get("message_id")
+
+        order = update_personal_order(
+            personal_order_id=order_id,
+            description=order_description,
+            photo_path=photo_path,
+            status='accepted'
+        )
+
+        admin_chat_id = get_admin_id()
+
+        message_text = (
+            f"Новый заказ от {callback.from_user.full_name} "
+            f"(@{callback.from_user.username or 'Не указано'}):\n\n"
+            f"{order.description}"
+        )
+
+        if order.image:
+            photo = FSInputFile(photo_path)
+            await callback.bot.send_photo(chat_id=admin_chat_id, photo=photo, caption=message_text)
+
+        else:
+            await callback.bot.send_message(chat_id=admin_chat_id, text=message_text)
+
+        await callback.bot.edit_message_caption(
+            chat_id=callback.message.chat.id,
+            message_id=message_id,
+            caption="Ваш заказ отправлен! Спасибо за обращение.",
+            reply_markup=BackToCatalog)
+
+        await state.clear()
+
+    async def back_to_catalog_personal_order(self, callback: CallbackQuery):
+        personal_order_id = int(callback.data.split('_')[-1])
+        set_personal_order_status_closed(personal_order_id)
+        text, path = catalog_menu_text()
+        photo = InputMediaPhoto(media=FSInputFile(path), caption=text)
+        await callback.message.edit_media(photo, reply_markup=CatalogMenu)
+
 
 MainMenuCallbackHandler = MainMenuCallback(router_callback)
 PersonalAccountCallbackHandler = PersonalAccountCallback(router_callback)
-SupportCallbackHandler = SupportCallback(router_callback, 5273759076)
+SupportCallbackHandler = SupportCallback(router_callback, get_admin_id())
 CatalogCallbackHandler = CatalogCallback(router_callback)

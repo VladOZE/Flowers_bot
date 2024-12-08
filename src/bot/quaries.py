@@ -132,3 +132,51 @@ def get_product_by_id(product_id: int) -> dict:
         )
     session.close()
     return product
+
+
+def create_personal_order(telegram_id: int, description: str, photo_path: str, status: str) -> PersonalOrder:
+    with Session() as session:
+        personal_order = PersonalOrder(
+            customer_telegram_id=telegram_id,
+            description=description,
+            image=photo_path,
+            status=status
+        )
+        session.add(personal_order)
+        session.commit()
+        session.refresh(personal_order)
+    session.close()
+    return personal_order
+
+
+def update_personal_order(personal_order_id: int, description: str, photo_path: str, status: str) -> PersonalOrder:
+    with Session() as session:
+        personal_order = session.query(PersonalOrder).filter(PersonalOrder.personal_order_id == personal_order_id).first()
+
+        if not personal_order:
+            return None
+
+        personal_order.description = description
+        personal_order.image = photo_path
+        personal_order.status = status
+
+        session.commit()
+
+        session.refresh(personal_order)
+
+    session.close()
+    return personal_order
+
+
+def get_personal_order_by_id(order_id: int) -> PersonalOrder:
+    with Session() as session:
+        return session.query(PersonalOrder).filter(PersonalOrder.personal_order_id == order_id).first()
+
+
+def set_personal_order_status_closed(order_id: int) -> None:
+    with Session() as session:
+        personal_order = session.query(PersonalOrder).filter(PersonalOrder.personal_order_id == order_id).first()
+        personal_order.status = 'closed'
+        session.commit()
+        session.close()
+    return

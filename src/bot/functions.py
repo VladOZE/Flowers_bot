@@ -125,11 +125,14 @@ def create_products_keyboard(page_num: int, products: List[Product], product_typ
 
     return InlineKeyboardMarkup(inline_keyboard=keyboard)
 
+
 def create_products_list(products: List[Product]) -> str:
     return "\n".join([f"{i + 1}. {product.name}" for i, product in enumerate(products)])
 
+
 def create_flowers_list(flowers: List[Product]) -> str:
     return "\n".join([f"{i + 1} - {flower.name}" for i, flower in enumerate(flowers)])
+
 
 def create_product_keyboard(product_id: int, product_type: str):
     return InlineKeyboardMarkup(
@@ -140,6 +143,10 @@ def create_product_keyboard(product_id: int, product_type: str):
     )
 
 # Здесь заканчивается блок кода с функциями для класса CatalogCallback
+
+
+def get_admin_id() -> int:
+    return 5273759076
 
 
 async def set_commands(bot: Bot) -> None:

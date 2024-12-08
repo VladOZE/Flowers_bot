@@ -46,6 +46,11 @@ class SupportStatus(enum.Enum):
     closed = "closed"
 
 
+class PersonalOrderStatus(enum.Enum):
+    accepted = 'accepted'
+    closed = 'closed'
+
+
 class Product(Base):
     __tablename__ = 'products'
 
@@ -158,3 +163,13 @@ class SupportMessage(Base):
     created_at = Column(TIMESTAMP, default=func.now(), nullable=False)
 
     ticket = relationship("SupportTicket", back_populates="messages")
+
+
+class PersonalOrder(Base):
+    __tablename__ = 'personal_order'
+
+    personal_order_id = Column(BIGINT(unsigned=True), primary_key=True, nullable=False, autoincrement=True)
+    customer_telegram_id = Column(BIGINT(unsigned=True))
+    description = Column(Text, default=None)
+    image = Column(Text, default=None)
+    status = Column(Enum(PersonalOrderStatus), default=PersonalOrderStatus.accepted, nullable=False)
