@@ -153,7 +153,7 @@ class SupportCallback:
         self.router.message(SupportStates.Question)(self.answer_question)
         self.router.message(Command('reply'))(self.admin_reply)
         self.router.callback_query(F.data.startswith("close_"))(self.close_ticket)
-        self.router.callback_query(F.data.startswith("add_"))(self.add_text_ticket)
+        self.router.callback_query(F.data.startswith("add_ticketinfo_"))(self.add_text_ticket)
         self.router.message(SupportStates.AddMessage)(self.handle_ticket_message)
         self.router.callback_query(F.data.startswith("open_appeals_"))(self.show_open_appeals)
         self.router.callback_query(F.data.startswith("closed_appeals_"))(self.show_closed_appeals)
@@ -228,7 +228,7 @@ class SupportCallback:
             inline_keyboard=[
                 [
                 InlineKeyboardButton(text='Закрыть обращение', callback_data=f"close_{ticket_id}_{message.from_user.id}"),
-                InlineKeyboardButton(text='Дополнить обращение', callback_data=f"add_{ticket_id}_{message.from_user.id}")
+                InlineKeyboardButton(text='Дополнить обращение', callback_data=f"add_ticketinfo_{ticket_id}_{message.from_user.id}")
                 ]
             ]
         )
@@ -249,8 +249,8 @@ class SupportCallback:
 
     async def add_text_ticket(self, callback: CallbackQuery, state: FSMContext):
         data = callback.data.split("_")
-        ticket_id = int(data[1])
-        customer_id = int(data[2])
+        ticket_id = int(data[2])
+        customer_id = int(data[3])
 
         ticket = get_ticket_by_id(ticket_id)
         if not ticket:
@@ -373,7 +373,6 @@ class SupportCallback:
     # async def feedback_form(self, callback: CallbackQuery):
 
 
-
 class CatalogCallback:
     def __init__(self, router: Router):
         self.router = router
@@ -482,7 +481,7 @@ class CatalogCallback:
             _, path = catalog_menu_text()
             photo = InputMediaPhoto(media=FSInputFile(path), caption=caption)
 
-        await callback.message.edit_media(media=photo, reply_markup=create_product_keyboard(product_id, product.product_type))
+        await callback.message.edit_media(media=photo, reply_markup=create_product_keyboard(product.product_id, product.product_type))
 
     async def personal_order(self, callback: CallbackQuery, state: FSMContext):
         _, path = catalog_menu_text()
@@ -615,7 +614,123 @@ class CatalogCallback:
         await callback.message.edit_media(photo, reply_markup=CatalogMenu)
 
 
+class ShoppingCartAndOrdersCallback:
+    def __init__(self, router: Router):
+        self.router = router
+        self.register_callbacks()
+
+    def register_callbacks(self):
+        self.router.callback_query(F.data.startswith("add_to_cart_"))(self.add_to_cart)
+        self.router.callback_query(F.data == "shopping_cart")(self.shopping_cart)
+        self.router.callback_query(F.data.startswith("next_page_cart_"))(self.next_page)
+        self.router.callback_query(F.data.startswith("prev_page_cart_"))(self.previous_page)
+        self.router.callback_query(F.data.startswith("cart_item_"))(self.view_cart_item)
+        self.router.callback_query(F.data.startswith("change_quantity_"))(self.change_quantity)
+
+    async def add_to_cart(self, callback:CallbackQuery):
+        product_id = int(callback.data.split('_')[-1])
+        customer_telegram_id = callback.from_user.id
+
+        existing_cart_item = get_existing_cart_item(customer_telegram_id, product_id)
+        if existing_cart_item:
+            caption = 'Товар уже в корзине (изменить кол-во вы можете в корзине)'
+        else:
+            add_to_shopping_cart(customer_telegram_id, product_id)
+            caption = 'Товар успешно добавлен в корзину!'
+
+        await callback.message.edit_caption(caption=caption, reply_markup=BackToCatalog)
+
+    async def shopping_cart(self, callback: CallbackQuery):
+        customer_telegram_id = callback.from_user.id
+
+        shopping_cart_items = get_customer_shopping_cart(customer_telegram_id)
+
+        if not shopping_cart_items:
+            await callback.message.edit_caption(caption="Ваша корзина пуста. Вы можете добавить товары из каталога.", reply_markup=BackToCatalog)
+            return
+
+        text = create_cart_list(shopping_cart_items)
+        keyboard = create_cart_keyboard(page_num=1, cart_items=shopping_cart_items)
+
+        await callback.message.edit_caption(caption=text, reply_markup=keyboard)
+
+    async def next_page(self, callback: CallbackQuery):
+        page_num = int(callback.data.split('_')[-1])
+        customer_telegram_id = callback.from_user.id
+
+        shopping_cart_items = get_customer_shopping_cart(customer_telegram_id)
+        text = create_cart_list(shopping_cart_items, page_num)
+        keyboard = create_cart_keyboard(page_num=page_num, cart_items=shopping_cart_items)
+
+        await callback.message.edit_caption(caption=text, reply_markup=keyboard)
+
+    async def previous_page(self, callback: CallbackQuery):
+        page_num = int(callback.data.split('_')[-1])
+        customer_telegram_id = callback.from_user.id
+
+        shopping_cart_items = get_customer_shopping_cart(customer_telegram_id)
+        text = create_cart_list(shopping_cart_items, page_num)
+        keyboard = create_cart_keyboard(page_num=page_num, cart_items=shopping_cart_items)
+
+        await callback.message.edit_caption(caption=text, reply_markup=keyboard)
+
+    async def view_cart_item(self, callback: CallbackQuery):
+        product_id = int(callback.data.split('_')[-1])
+        customer_telegram_id = callback.from_user.id
+
+        cart_item = get_existing_cart_item(customer_telegram_id, product_id)
+        if not cart_item:
+            await callback.answer("Товар не найден в корзине.")
+            return
+
+        product = get_product_by_id(product_id)
+        if not product:
+            await callback.answer("Информация о товаре недоступна.")
+            return
+
+        caption = (
+            f"Название: {product.name}\n"
+            f"Количество: {cart_item.count}\n"
+            f"Цена за единицу: {product.price} ₽\n"
+            f"Общая стоимость: {product.price * cart_item.count} ₽"
+        )
+
+        if product.image_url:
+            photo = InputMediaPhoto(media=product.image_url, caption=caption)
+        else:
+            _, path = catalog_menu_text()
+            photo = InputMediaPhoto(media=FSInputFile(path), caption=caption)
+
+        await callback.message.edit_media(media=photo, reply_markup=create_cart_item_keyboard(product_id))
+
+    async def change_quantity(self, callback: CallbackQuery):
+        product_id = int(callback.data.split('_')[-1])
+        product = get_product_by_id(product_id)
+        if not product:
+            await callback.answer("Информация о товаре недоступна.")
+            return
+        caption = (f'Товар: {product.name}, текущее кол-во: {product.count}'
+                   'Выберите насколько хотите изменить кол-во:')
+        keyboard = InlineKeyboardMarkup(inline_keyboard=[
+            [
+                InlineKeyboardButton(text="+1", callback_data=f"increase_quantity_{product_id}_1"),
+                InlineKeyboardButton(text="+2", callback_data=f"increase_quantity_{product_id}_2"),
+                InlineKeyboardButton(text="+5", callback_data=f"increase_quantity_{product_id}_5"),
+            ],
+            [
+                InlineKeyboardButton(text="-1", callback_data=f"decrease_quantity_{product_id}_1"),
+                InlineKeyboardButton(text="-2", callback_data=f"decrease_quantity_{product_id}_2"),
+                InlineKeyboardButton(text="-5", callback_data=f"decrease_quantity_{product_id}_5"),
+            ],
+            [InlineKeyboardButton(text="Назад к товару", callback_data=f"cart_item_{product_id}")],
+        ]
+    )
+
+
+
+
 MainMenuCallbackHandler = MainMenuCallback(router_callback)
 PersonalAccountCallbackHandler = PersonalAccountCallback(router_callback)
 SupportCallbackHandler = SupportCallback(router_callback, get_admin_id())
 CatalogCallbackHandler = CatalogCallback(router_callback)
+ShoppingCartAndOrdersCallbackHandler = ShoppingCartAndOrdersCallback(router_callback)

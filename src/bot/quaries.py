@@ -1,6 +1,7 @@
 from src.database.database_base import Session
 from src.database.models import *
 from sqlalchemy.orm import joinedload
+from sqlalchemy import select
 from typing import List
 
 
@@ -180,3 +181,32 @@ def set_personal_order_status_closed(order_id: int) -> None:
         session.commit()
         session.close()
     return
+
+
+def add_to_shopping_cart(customer_telegram_id: int, product_id: int, count: int = 1):
+    new_cart = ShoppingCart(customer_telegram_id=customer_telegram_id, product_id=product_id, count=count)
+    with Session() as session:
+        session.add(new_cart)
+        session.commit()
+    session.close()
+    return
+
+
+def get_customer_shopping_cart(customer_telegram_id: int):
+    with Session() as session:
+        query = (
+            select(ShoppingCart, Product)
+            .join(Product, ShoppingCart.product_id == Product.product_id)
+            .where(ShoppingCart.customer_telegram_id == customer_telegram_id)
+        )
+        results = session.execute(query).all()
+    session.close()
+    return results
+
+
+def get_existing_cart_item(customer_telegram_id: int, product_id: int):
+    with Session() as session:
+        return session.query(ShoppingCart).filter_by(
+            customer_telegram_id=customer_telegram_id,
+            product_id=product_id
+        ).first()

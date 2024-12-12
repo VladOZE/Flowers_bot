@@ -145,6 +145,70 @@ def create_product_keyboard(product_id: int, product_type: str):
 # Здесь заканчивается блок кода с функциями для класса CatalogCallback
 
 
+# Здесь Начинается блок кода с функциями для класса ShoppingCartAndOrdersCallback
+
+def create_cart_list(cart_items):
+    total_sum = 0
+    cart_text = []
+
+    for index, (cart, product) in enumerate(cart_items, start=1):
+        item_sum = product.price * cart.count
+        total_sum += item_sum
+        cart_text.append(
+            f"{index}. {product.name} — Количество: {cart.count} шт. — Цена: {product.price} руб. — Сумма: {item_sum} руб."
+        )
+
+    cart_text.append(f"\nОбщая сумма: {total_sum} руб.")
+    return "\n".join(cart_text)
+
+
+def create_cart_keyboard(page_num: int, cart_items, max_buttons=10):
+    buttons_per_row = 3
+    start_index = (page_num - 1) * max_buttons
+    end_index = min(start_index + max_buttons, len(cart_items))
+    items_to_display = cart_items[start_index:end_index]
+
+    keyboard = []
+
+    for i in range(0, len(items_to_display), buttons_per_row):
+        row = [
+            InlineKeyboardButton(
+                text=str(j + 1 + start_index),
+                callback_data=f'cart_item_{items_to_display[j][0].product_id}'
+            )
+            for j in range(i, min(i + buttons_per_row, len(items_to_display)))
+        ]
+        keyboard.append(row)
+
+    navigation_row = []
+    if page_num > 1:
+        navigation_row.append(InlineKeyboardButton(text='<-', callback_data=f'prev_page_cart_{page_num - 1}'))
+    if end_index < len(cart_items):
+        navigation_row.append(InlineKeyboardButton(text='->', callback_data=f'next_page_cart_{page_num + 1}'))
+    if navigation_row:
+        keyboard.append(navigation_row)
+
+    keyboard.append([InlineKeyboardButton(text='Назад в каталог', callback_data='back_to_catalog')])
+
+    return InlineKeyboardMarkup(inline_keyboard=keyboard)
+
+
+def create_cart_item_keyboard(product_id: int):
+    return InlineKeyboardMarkup(
+        inline_keyboard=[
+            [
+                InlineKeyboardButton(text="Изменить количество", callback_data=f"change_quantity_{product_id}"),
+                InlineKeyboardButton(text="Удалить из корзины", callback_data=f"remove_from_cart_{product_id}")
+            ],
+            [
+                InlineKeyboardButton(text="Назад в корзину", callback_data="shopping_cart"),
+            ]
+        ]
+    )
+
+# Здесь заканчивается блок кода с функциями для класса ShoppingCartAndOrdersCallback
+
+
 def get_admin_id() -> int:
     return 5273759076
 

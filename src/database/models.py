@@ -173,3 +173,11 @@ class PersonalOrder(Base):
     description = Column(Text, default=None)
     image = Column(Text, default=None)
     status = Column(Enum(PersonalOrderStatus), default=PersonalOrderStatus.accepted, nullable=False)
+
+
+class ShoppingCart(Base):
+    __tablename__ = 'shopping_cart'
+
+    customer_telegram_id = Column(BIGINT(unsigned=True), ForeignKey('customers.customer_telegram_id'), primary_key=True, nullable=False)
+    product_id = Column(INTEGER(unsigned=True), ForeignKey('products.product_id'), primary_key=True, nullable=False)
+    count = Column(INTEGER(unsigned=True), nullable=False, default=1)
