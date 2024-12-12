@@ -193,16 +193,46 @@ def create_cart_keyboard(page_num: int, cart_items, max_buttons=10):
     return InlineKeyboardMarkup(inline_keyboard=keyboard)
 
 
-def create_cart_item_keyboard(product_id: int):
+def create_cart_item_keyboard(product_id: int, count: int):
     return InlineKeyboardMarkup(
         inline_keyboard=[
             [
-                InlineKeyboardButton(text="Изменить количество", callback_data=f"change_quantity_{product_id}"),
+                InlineKeyboardButton(text="Изменить количество", callback_data=f"change_quantity_{product_id}_{count}"),
                 InlineKeyboardButton(text="Удалить из корзины", callback_data=f"remove_from_cart_{product_id}")
             ],
             [
                 InlineKeyboardButton(text="Назад в корзину", callback_data="shopping_cart"),
             ]
+        ]
+    )
+
+
+def generate_quantity_keyboard(product_id: int, curr_count: int) -> InlineKeyboardMarkup:
+    increase_buttons = [
+        InlineKeyboardButton(text="+1", callback_data=f"increase_quantity_{product_id}_1"),
+        InlineKeyboardButton(text="+2", callback_data=f"increase_quantity_{product_id}_2"),
+        InlineKeyboardButton(text="+5", callback_data=f"increase_quantity_{product_id}_5"),
+    ]
+
+    decrease_buttons = []
+    if curr_count >= 2:
+        decrease_buttons.append(
+            InlineKeyboardButton(text="-1", callback_data=f"decrease_quantity_{product_id}_1")
+        )
+    if curr_count >= 3:
+        decrease_buttons.append(
+            InlineKeyboardButton(text="-2", callback_data=f"decrease_quantity_{product_id}_2")
+        )
+    if curr_count > 5:
+        decrease_buttons.append(
+            InlineKeyboardButton(text="-5", callback_data=f"decrease_quantity_{product_id}_5")
+        )
+
+    return InlineKeyboardMarkup(
+        inline_keyboard=[
+            increase_buttons,
+            decrease_buttons if decrease_buttons else [],
+            [InlineKeyboardButton(text="Назад к товару", callback_data=f"cart_item_{product_id}")],
         ]
     )
 

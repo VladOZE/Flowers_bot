@@ -210,3 +210,32 @@ def get_existing_cart_item(customer_telegram_id: int, product_id: int):
             customer_telegram_id=customer_telegram_id,
             product_id=product_id
         ).first()
+
+
+def update_cart_item_quantity(customer_telegram_id: int, product_id: int, delta: int) -> int:
+    with Session() as session:
+        cart_item = session.query(ShoppingCart).filter_by(
+            customer_telegram_id=customer_telegram_id,
+            product_id=product_id
+        ).first()
+
+        if not cart_item:
+            raise ValueError("Товар не найден в корзине.")
+
+        cart_item.count = max(1, cart_item.count + delta)
+        session.commit()
+        return cart_item.count
+
+
+def remove_from_cart(customer_telegram_id: int, product_id: int):
+    with Session() as session:
+        cart_item = session.query(ShoppingCart).filter_by(
+            customer_telegram_id=customer_telegram_id,
+            product_id=product_id
+        ).first()
+
+        if not cart_item:
+            raise ValueError("Товар не найден в корзине.")
+
+        session.delete(cart_item)
+        session.commit()

@@ -626,6 +626,9 @@ class ShoppingCartAndOrdersCallback:
         self.router.callback_query(F.data.startswith("prev_page_cart_"))(self.previous_page)
         self.router.callback_query(F.data.startswith("cart_item_"))(self.view_cart_item)
         self.router.callback_query(F.data.startswith("change_quantity_"))(self.change_quantity)
+        self.router.callback_query(F.data.startswith("increase_quantity_"))(self.increase_quantity)
+        self.router.callback_query(F.data.startswith("decrease_quantity_"))(self.decrease_quantity)
+        self.router.callback_query(F.data.startswith("remove_from_cart_"))(self.remove_from_cart)
 
     async def add_to_cart(self, callback:CallbackQuery):
         product_id = int(callback.data.split('_')[-1])
@@ -701,32 +704,63 @@ class ShoppingCartAndOrdersCallback:
             _, path = catalog_menu_text()
             photo = InputMediaPhoto(media=FSInputFile(path), caption=caption)
 
-        await callback.message.edit_media(media=photo, reply_markup=create_cart_item_keyboard(product_id))
+        await callback.message.edit_media(media=photo, reply_markup=create_cart_item_keyboard(product_id, cart_item.count))
 
     async def change_quantity(self, callback: CallbackQuery):
-        product_id = int(callback.data.split('_')[-1])
+        curr_count = int(callback.data.split('_')[-1])
+        product_id = int(callback.data.split('_')[-2])
         product = get_product_by_id(product_id)
         if not product:
             await callback.answer("Информация о товаре недоступна.")
             return
-        caption = (f'Товар: {product.name}, текущее кол-во: {product.count}'
+        caption = (f'Товар: {product.name},\n\nТекущее кол-во: {curr_count}\n\n'
                    'Выберите насколько хотите изменить кол-во:')
-        keyboard = InlineKeyboardMarkup(inline_keyboard=[
-            [
-                InlineKeyboardButton(text="+1", callback_data=f"increase_quantity_{product_id}_1"),
-                InlineKeyboardButton(text="+2", callback_data=f"increase_quantity_{product_id}_2"),
-                InlineKeyboardButton(text="+5", callback_data=f"increase_quantity_{product_id}_5"),
-            ],
-            [
-                InlineKeyboardButton(text="-1", callback_data=f"decrease_quantity_{product_id}_1"),
-                InlineKeyboardButton(text="-2", callback_data=f"decrease_quantity_{product_id}_2"),
-                InlineKeyboardButton(text="-5", callback_data=f"decrease_quantity_{product_id}_5"),
-            ],
-            [InlineKeyboardButton(text="Назад к товару", callback_data=f"cart_item_{product_id}")],
-        ]
-    )
 
+        keyboard = generate_quantity_keyboard(product_id, curr_count)
 
+        await callback.message.edit_caption(caption=caption, reply_markup=keyboard)
+
+    async def increase_quantity(self, callback: CallbackQuery):
+        product_id = int(callback.data.split('_')[-2])
+        delta = int(callback.data.split('_')[-1])
+        customer_telegram_id = callback.from_user.id
+
+        new_quantity = update_cart_item_quantity(customer_telegram_id, product_id, delta)
+        product = get_product_by_id(product_id)
+        caption = (f'Товар: {product.name},\n\nТекущее кол-во: {new_quantity}\n\n'
+                    'Выберите насколько хотите изменить кол-во:')
+        keyboard = generate_quantity_keyboard(product_id, new_quantity)
+        await callback.message.edit_caption(caption=caption, reply_markup=keyboard)
+
+    async def decrease_quantity(self, callback: CallbackQuery):
+        product_id = int(callback.data.split('_')[-2])
+        delta = -int(callback.data.split('_')[-1])
+        customer_telegram_id = callback.from_user.id
+
+        new_quantity = update_cart_item_quantity(customer_telegram_id, product_id, delta)
+        product = get_product_by_id(product_id)
+        caption = (f'Товар: {product.name},\n\nТекущее кол-во: {new_quantity}\n\n'
+                   'Выберите насколько хотите изменить кол-во:')
+        keyboard = generate_quantity_keyboard(product_id, new_quantity)
+        await callback.message.edit_caption(caption=caption, reply_markup=keyboard)
+
+    async def remove_from_cart(self, callback:CallbackQuery):
+        product_id = int(callback.data.split('_')[-1])
+        customer_telegram_id = callback.from_user.id
+
+        remove_from_cart(customer_telegram_id, product_id)
+
+        cart_items = get_customer_shopping_cart(customer_telegram_id)
+        if not cart_items:
+            _, path = catalog_menu_text()
+            caption = "Ваша корзина пуста. Вы можете добавить товары из каталога."
+            photo = InputMediaPhoto(media=FSInputFile(path), caption=caption)
+            await callback.message.edit_media(media = photo, reply_markup=BackToCatalog)
+        else:
+            cart_text = "Корзина успешно обновлена!"
+            keyboard = InlineKeyboardMarkup(inline_keyboard=[
+                [InlineKeyboardButton(text="Вернуться в корзину", callback_data=f"shopping_cart")]])
+            await callback.message.edit_caption(caption=cart_text, reply_markup=keyboard)
 
 
 MainMenuCallbackHandler = MainMenuCallback(router_callback)
