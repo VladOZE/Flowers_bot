@@ -3,6 +3,7 @@ from aiogram import Bot
 from aiogram.types import BotCommand, InlineKeyboardMarkup, InlineKeyboardButton, BotCommandScopeDefault
 from src.database.models import *
 import os
+from keyboards import BackToPersonalMenu
 
 
 # Отсюда начинается блок кода с функциями для класса MainMenuCallback
@@ -89,6 +90,56 @@ def create_keyboard_for_gallery(index: int) -> InlineKeyboardMarkup:
 # Здесь заканчивается блок кода с функциями для класса MainMenuCallback
 
 # Отсюда начинается блок кода с функциями для класса PersonalAccountCallback
+
+def create_order_history_keyboard_and_text(orders: List[Order] | None):
+    if not orders:
+        return "У вас пока нет заказов.", BackToPersonalMenu
+
+    caption = 'Ваши заказы\n\n'
+    keyboard = []
+    buttons_per_row = 3
+
+    for order in orders:
+        order_date = order.order_date.strftime('%Y.%m.%d %H:%M:%S')
+        caption += f"Заказ №{order.order_id} - - - от {order_date}\n"
+
+    for i in range(0, len(orders), buttons_per_row):
+        row = [
+            InlineKeyboardButton(
+                text=f"Открыть заказ №{order.order_id}",
+                callback_data=f"view_order_{order.order_id}"
+            )
+            for order in orders[i:i + buttons_per_row]
+        ]
+        keyboard.append(row)
+
+    keyboard.append([InlineKeyboardButton(text="Назад в личный кабинет", callback_data="personal_account")])
+
+    return caption, InlineKeyboardMarkup(inline_keyboard=keyboard)
+
+
+def create_order_details(order):
+    if not order:
+        return "Заказ не найден."
+
+    order_details = f"Заказ №{order.order_id}\n"
+    order_details += f"Дата заказа: {order.order_date}\n"
+    order_details += f"Статус: {order.status.name}\n\n"
+
+    order_details += "Состав заказа:\n"
+    total_price = 0
+
+    for order_item in order.order_items:
+        product = order_item.product
+        product_name = product.name if product else "Неизвестный продукт"
+        order_details += (
+            f"  - {product_name} ({order_item.product_type.name}): "
+            f"{order_item.quantity} шт. по {order_item.price} руб. за шт.\n"
+        )
+
+    order_details += f"\nИтого: {order.total_price} руб.\n"
+    return order_details
+
 
 # Здесь заканчивается блок кода с функциями для класса PersonalAccountCallback
 
@@ -188,6 +239,7 @@ def create_cart_keyboard(page_num: int, cart_items, max_buttons=10):
     if navigation_row:
         keyboard.append(navigation_row)
 
+    keyboard.append([InlineKeyboardButton(text='Оформить заказ', callback_data='place_order')])
     keyboard.append([InlineKeyboardButton(text='Назад в каталог', callback_data='back_to_catalog')])
 
     return InlineKeyboardMarkup(inline_keyboard=keyboard)
@@ -237,6 +289,65 @@ def generate_quantity_keyboard(product_id: int, curr_count: int) -> InlineKeyboa
     )
 
 # Здесь заканчивается блок кода с функциями для класса ShoppingCartAndOrdersCallback
+
+
+# Здесь начинается блок кода с функциями для класса PlaceOrderCallback
+
+def create_addresses_keyboard(addresses: List[Addresses]) -> Tuple[str, InlineKeyboardMarkup]:
+    text_lines = ["Выберите адрес для заказа:"]
+    keyboard_buttons = []
+
+    for idx, address in enumerate(addresses, start=1):
+        description = (
+            f"{idx}. {address.city}, {address.address_line}"
+        )
+        text_lines.append(description)
+
+        keyboard_buttons.append([
+            InlineKeyboardButton(text=f"Выбрать адрес {idx}",
+                                 callback_data=f"select_address_{address.address_id}")
+        ])
+
+    keyboard_buttons.append([
+        InlineKeyboardButton(text="Вернуться в корзину", callback_data="shopping_cart")
+    ])
+
+    caption = "\n\n".join(text_lines)
+    keyboard = InlineKeyboardMarkup(inline_keyboard=keyboard_buttons)
+
+    return caption, keyboard
+
+
+def create_order_confirmation(cart_items, address: Addresses, customer: Customer) -> Tuple[str, InlineKeyboardMarkup]:
+    total_sum = 0
+    cart_text = []
+
+    for index, (cart, product) in enumerate(cart_items, start=1):
+        item_sum = product.price * cart.count
+        total_sum += item_sum
+        cart_text.append(
+            f"{index}. {product.name} — Количество: {cart.count} шт. — Цена: {product.price} руб. — Сумма: {item_sum} руб."
+        )
+
+    cart_text.append(f"\nОбщая сумма: {total_sum} руб.")
+
+    address_text = f"\n\nВыбранный адрес:\n{address.city}, {address.address_line}"
+
+    receiver = (f"\n\nПолучатель: {address.recipient_name if address.recipient_name else customer.first_name}, Телефон: "
+                f"{address.recipient_number if address.recipient_name else customer.phone}")
+
+    caption = "\n".join(cart_text) + address_text + receiver
+
+    keyboard_buttons = [
+        [InlineKeyboardButton(text="Перейти к оплате", callback_data=f"proceed_to_payment_{address.address_id}")],
+        [InlineKeyboardButton(text="Изменить получателя", callback_data=f"change_recipient_{address.address_id}")],
+        [InlineKeyboardButton(text="Вернуться в корзину", callback_data="shopping_cart")]
+    ]
+    keyboard = InlineKeyboardMarkup(inline_keyboard=keyboard_buttons)
+
+    return caption, keyboard
+
+# Здесь заканчивается блок кода с функциями для класса PlaceOrderCallback
 
 
 def get_admin_id() -> int:

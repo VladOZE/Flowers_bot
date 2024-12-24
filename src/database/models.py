@@ -72,7 +72,7 @@ class Customer(Base):
     customer_telegram_id = Column(BIGINT(unsigned=True), unique=True, nullable=False)
     first_name = Column(String(100), nullable=False)
     last_name = Column(String(100), default=None)
-    patronymic = Column(String(100), default=None)
+    real_name = Column(String(100), default=None)
     email = Column(String(100), default=None)
     phone = Column(String(15), default=None)
     amount_orders = Column(INTEGER(unsigned=True), nullable=False, default=0)
@@ -87,6 +87,7 @@ class Order(Base):
     order_date = Column(TIMESTAMP, nullable=False)
     total_price = Column(DECIMAL(10, 2), default=None)
     status = Column(Enum(OrderStatusEnum), nullable=False)
+    address_id = Column(INTEGER(unsigned=True), ForeignKey('addresses.address_id'), nullable=False)
 
     customer = relationship("Customer", backref="orders")
     order_items = relationship("OrderItem", back_populates="order")
@@ -181,3 +182,14 @@ class ShoppingCart(Base):
     customer_telegram_id = Column(BIGINT(unsigned=True), ForeignKey('customers.customer_telegram_id'), primary_key=True, nullable=False)
     product_id = Column(INTEGER(unsigned=True), ForeignKey('products.product_id'), primary_key=True, nullable=False)
     count = Column(INTEGER(unsigned=True), nullable=False, default=1)
+
+
+class Addresses(Base):
+    __tablename__ = 'addresses'
+
+    address_id = Column(INTEGER(unsigned=True), primary_key=True, nullable=False, autoincrement=True)
+    customer_id = Column(INTEGER(unsigned=True), ForeignKey('customers.customer_id'), nullable=False)
+    city = Column(String(100), nullable=False)
+    address_line = Column(String(255), nullable=False)
+    recipient_number = Column(String(25), default=None)
+    recipient_name = Column(String(100), default=None)

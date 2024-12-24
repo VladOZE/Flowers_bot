@@ -3,6 +3,7 @@ from src.database.models import *
 from sqlalchemy.orm import joinedload
 from sqlalchemy import select
 from typing import List
+from datetime import datetime
 
 
 def get_customer(customer_telegram_id: int) -> Customer:
@@ -99,6 +100,14 @@ def get_customer_tickets(customer_id: int, status: str) -> List[SupportTicket]:
         )
     session.close()
     return tickets
+
+
+def get_ticket_messages(ticket_id: int):
+    with Session() as session:
+        messages = session.query(SupportMessage).filter_by(ticket_id=ticket_id).all()
+        session.close()
+    return messages
+
 
 
 def get_flowers_list() -> List[Product]:
@@ -239,3 +248,129 @@ def remove_from_cart(customer_telegram_id: int, product_id: int):
 
         session.delete(cart_item)
         session.commit()
+
+
+def get_customer_by_telegram_id(customer_telegram_id: int) -> Customer | None:
+    with Session() as session:
+        customer = session.query(Customer).filter_by(customer_telegram_id=customer_telegram_id).first()
+        return customer if customer else None
+
+
+def get_customer_addresses(customer_telegram_id: int) -> List[Addresses] | None:
+    with Session() as session:
+        customer = session.query(Customer).filter_by(customer_telegram_id=customer_telegram_id).first()
+        if not customer:
+            return None
+
+        addresses = session.query(Addresses).filter_by(customer_id=customer.customer_id).all()
+        return addresses if addresses else None
+
+
+def add_new_address(address: Addresses) -> None:
+    with Session() as session:
+        session.add(address)
+        session.commit()
+    session.close()
+
+
+def get_address_by_id(address_id: int) -> Addresses:
+    with Session() as session:
+        address = session.query(Addresses).filter_by(address_id=address_id).first()
+        session.close()
+    return address
+
+
+def update_customer_data(customer_telegram_id: int, first_name: str = None, last_name: str = None,
+                         real_name: str = None, phone_number: str = None, email: str = None) -> None:
+    with Session() as session:
+        customer = session.query(Customer).filter(Customer.customer_telegram_id == customer_telegram_id).first()
+
+        print(f"Before update: {customer.__dict__}")
+        if first_name is not None:
+            customer.first_name = first_name
+        if last_name is not None:
+            customer.last_name = last_name
+        if real_name is not None:
+            customer.real_name = real_name
+        if phone_number is not None:
+            customer.phone = phone_number
+        if email is not None:
+            customer.email = email
+        print(f"After update: {customer.__dict__}")
+
+        session.commit()
+
+
+def change_recipient_in_address(address_id, new_name: str, new_phone_number: str) -> Addresses:
+    with Session() as session:
+        address: Addresses = session.query(Addresses).filter(Addresses.address_id == address_id).first()
+        address.recipient_name = new_name
+        address.recipient_number = new_phone_number
+        session.commit()
+        session.refresh(address)
+    session.close()
+    return address
+
+
+def create_order_and_clear_cart(customer_telegram_id: int, address_id: int) -> None:
+    with Session() as session:
+        customer = session.query(Customer).filter_by(customer_telegram_id=customer_telegram_id).first()
+
+        query = (
+            select(ShoppingCart, Product)
+            .join(Product, ShoppingCart.product_id == Product.product_id)
+            .where(ShoppingCart.customer_telegram_id == customer_telegram_id)
+        )
+        cart_items = session.execute(query).all()
+
+        new_order = Order(
+            customer_id=customer.customer_id,
+            order_date=datetime.now(),
+            total_price=sum(product.price * shopping_cart.count for shopping_cart, product in cart_items),
+            status='pending',
+            address_id=address_id
+        )
+
+        session.add(new_order)
+        session.commit()
+        session.refresh(new_order)
+
+
+        for shopping_cart, product in cart_items:
+            order_item = OrderItem(
+                order_id=new_order.order_id,
+                product_id=product.product_id,
+                quantity=shopping_cart.count,
+                price=product.price,
+            )
+            session.add(order_item)
+
+        session.query(ShoppingCart).filter_by(customer_telegram_id=customer_telegram_id).delete()
+
+        session.commit()
+
+
+def get_user_orders(customer_telegram_id: int):
+    with Session() as session:
+        orders = (
+            session.query(Order)
+            .join(Customer, Order.customer_id == Customer.customer_id)
+            .filter(Customer.customer_telegram_id == customer_telegram_id)
+            .order_by(Order.order_date.asc()).all()
+        )
+        session.close()
+    return orders
+
+
+def get_order_by_id(order_id: int) -> Order:
+    with Session() as session:
+        query = (
+            select(Order)
+            .options(
+                joinedload(Order.order_items).joinedload(OrderItem.product)
+            )
+            .where(Order.order_id == order_id)
+        )
+        result = session.execute(query).scalars().first()
+    return result
+

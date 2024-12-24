@@ -56,8 +56,8 @@ SupportMenu = InlineKeyboardMarkup(
 PersonalAccountMenu = InlineKeyboardMarkup(
     inline_keyboard=[
         [
-            InlineKeyboardButton(text='История заказов', callback_data='orders'),
-            InlineKeyboardButton(text='Мои адреса', callback_data='addresses')
+            InlineKeyboardButton(text='История заказов', callback_data='orders_history'),
+            InlineKeyboardButton(text='Мои адреса', callback_data='my_addresses')
         ],
         [
             InlineKeyboardButton(text='Мои обращения в поддержку', callback_data='appeals'),
@@ -97,3 +97,73 @@ BackToCatalog = InlineKeyboardMarkup(
 )
 
 
+BackToPersonalMenu = InlineKeyboardMarkup(
+    inline_keyboard=[
+        [
+            InlineKeyboardButton(text="Назад в личный кабинет", callback_data="personal_account")
+        ]
+    ]
+)
+
+
+BackToCart = InlineKeyboardMarkup(
+    inline_keyboard=[
+        [
+            InlineKeyboardButton(text="Назад в корзину", callback_data="shopping_cart")
+        ]
+    ]
+)
+
+
+BackToSupportMenu = InlineKeyboardMarkup(
+    inline_keyboard=[
+        [
+            InlineKeyboardButton(text="Назад в меню поддержки", callback_data="support")
+        ]
+    ]
+)
+
+
+BackToAppeals = InlineKeyboardMarkup(
+    inline_keyboard=[
+        [
+            InlineKeyboardButton(text="Назад к обращениям", callback_data=f"appeals")
+        ]
+    ]
+)
+
+
+NewAddressCart = InlineKeyboardMarkup(
+    inline_keyboard=[
+        [
+            InlineKeyboardButton(text='Новый адрес', callback_data='new_address')
+        ],
+        [
+            InlineKeyboardButton(text='Назад в корзину', callback_data='shopping_cart')
+        ]
+    ]
+)
+
+
+NewAddressPersonal = InlineKeyboardMarkup(
+    inline_keyboard=[
+        [
+            InlineKeyboardButton(text='Новый адрес', callback_data='new_address')
+        ],
+        [
+            InlineKeyboardButton(text='Назад в личный кабинет', callback_data='personal_account')
+        ]
+    ]
+)
+
+
+AddPersonalInfo = InlineKeyboardMarkup(
+    inline_keyboard=[
+        [
+            InlineKeyboardButton(text='Заполнить данные', callback_data='add_personal_info')
+        ],
+        [
+            InlineKeyboardButton(text='Назад в корзину', callback_data='shopping_cart')
+        ]
+    ]
+)

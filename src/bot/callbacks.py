@@ -4,9 +4,8 @@ from aiogram import Router, F
 from functions import *
 from keyboards import *
 from quaries import *
-from states import SupportStates, PersonalOrderStates
+from states import SupportStates, PersonalOrderStates, NewAddressStates, PersonalInfoStates, RecipientStates, FeedbackFormStates
 from aiogram.fsm.context import FSMContext
-import time
 
 
 router_callback = Router()
@@ -86,6 +85,13 @@ class PersonalAccountCallback:
         self.router.callback_query(F.data == "mailing")(self.mailing)
         self.router.callback_query(F.data.startswith("mailing:"))(self.turn_mailing)
         self.router.callback_query(F.data == "appeals")(self.appeals)
+        self.router.callback_query(F.data == "my_addresses")(self.my_addresses)
+        self.router.callback_query(F.data == "new_address")(self.new_address)
+        self.router.message(NewAddressStates.City)(self.process_city)
+        self.router.message(NewAddressStates.AddressLine)(self.process_address_line)
+        self.router.callback_query(F.data == "orders_history")(self.orders_history)
+        self.router.callback_query(F.data.startswith("view_order_"))(self.view_order)
+
 
     async def mailing(self, callback: CallbackQuery):
         text, path = personal_account_menu_text()
@@ -141,6 +147,83 @@ class PersonalAccountCallback:
         photo = InputMediaPhoto(media=FSInputFile(path), caption=caption)
         await callback.message.edit_media(media=photo, reply_markup=keyboard)
 
+    async def my_addresses(self, callback: CallbackQuery):
+        customer_telegram_id = callback.from_user.id
+
+        addresses = get_customer_addresses(customer_telegram_id)
+        if not addresses:
+            await callback.message.edit_caption(caption='Адреса не найдены, создадим новый?',
+                                                reply_markup=NewAddressPersonal)
+        addresses_text = "\n\n".join(
+            [f"{idx}. Город: {a.city}\nАдрес: {a.address_line}"
+             for idx, a in enumerate(addresses, 1)]
+        )
+        await callback.message.edit_caption(
+            caption=f"Ваши адреса:\n\n{addresses_text}",
+            reply_markup=NewAddressPersonal
+        )
+
+    async def new_address(self, callback: CallbackQuery, state: FSMContext):
+        caption = "Введите название города для нового адреса (Например: 'Санкт-Петербург'):"
+        message = await callback.message.edit_caption(caption=caption, reply_markup=BackToPersonalMenu)
+        await state.update_data(message_id=message.message_id)
+        await state.set_state(NewAddressStates.City)
+
+    async def process_city(self, message: Message, state: FSMContext):
+        await state.update_data(city=message.text)
+        await message.delete()
+
+        data = await state.get_data()
+        message_id = data.get("message_id")
+
+        caption = "Введите полный адрес с городом\n\n(Пример: 'г. Санкт-Петербург, ул. Пушкина, д.220 к.1 кв.300'):"
+        await message.bot.edit_message_caption(chat_id=message.chat.id, message_id=message_id, caption=caption)
+        await state.set_state(NewAddressStates.AddressLine)
+
+    async def process_address_line(self, message: Message, state: FSMContext):
+        await state.update_data(address_line=message.text)
+        await message.delete()
+
+        data = await state.get_data()
+        message_id = data.get("message_id")
+        city = data["city"]
+        address_line = data["address_line"]
+
+        customer_telegram_id = message.from_user.id
+        customer = get_customer_by_telegram_id(customer_telegram_id)
+        new_address = Addresses(
+            customer_id=customer.customer_id,
+            city=city,
+            address_line=address_line
+        )
+        add_new_address(new_address)
+
+        caption = f"Ваш адрес сохранён:\n\nГород: {city}\nАдрес: {address_line}"
+        await message.bot.edit_message_caption(
+            chat_id=message.chat.id,
+            message_id=message_id,
+            caption=caption,
+            reply_markup=BackToPersonalMenu
+        )
+        await state.clear()
+
+    async def orders_history(self, callback: CallbackQuery):
+        customer_telegram_id = callback.from_user.id
+
+        orders = get_user_orders(customer_telegram_id)
+        caption, keyboard = create_order_history_keyboard_and_text(orders)
+
+        await callback.message.edit_caption(caption=caption, reply_markup=keyboard)
+
+    async def view_order(self, callback: CallbackQuery):
+        data = callback.data.split('_')
+        order_id = data[-1]
+
+        order_details = get_order_by_id(order_id)
+        caption = create_order_details(order_details)
+
+        await callback.message.edit_caption(caption=caption, reply_markup=BackToPersonalMenu)
+
 
 class SupportCallback:
     def __init__(self, router: Router, admin_id: int):
@@ -157,15 +240,18 @@ class SupportCallback:
         self.router.message(SupportStates.AddMessage)(self.handle_ticket_message)
         self.router.callback_query(F.data.startswith("open_appeals_"))(self.show_open_appeals)
         self.router.callback_query(F.data.startswith("closed_appeals_"))(self.show_closed_appeals)
-    #    self.router.callback_query(F.data.startswith("view_ticket_"))(self.view_ticket)
-    #    self.router.callback_query(F.data.startswith("feedback_form"))(self.feedback_form)
+        self.router.callback_query(F.data.startswith("feedback_form"))(self.feedback_form)
+        self.router.message(FeedbackFormStates.PhoneOrMail)(self.process_form_contact_info)
+        self.router.message(FeedbackFormStates.FirstName)(self.process_form_name)
+        self.router.message(FeedbackFormStates.Question)(self.process_form_question)
+        self.router.callback_query(F.data.startswith("view_ticket_"))(self.view_ticket)
 
     async def call_operator(self, callback: CallbackQuery, state: FSMContext):
         text, path = support_menu_text()
         user = callback.from_user
         caption = 'Напишите ваш вопрос, он будет доставлен модератору'
         photo = InputMediaPhoto(media=FSInputFile(path), caption=caption)
-        message = await callback.message.edit_media(photo, reply_markup=BackToMenu)
+        message = await callback.message.edit_media(photo, reply_markup=BackToSupportMenu)
         await state.update_data(message_id=message.message_id)
         await state.set_state(SupportStates.Question)
 
@@ -327,7 +413,7 @@ class SupportCallback:
             keyboard.append(buttons[i:i + 3])
 
         keyboard.append(
-            [InlineKeyboardButton(text="Назад в личный кабинет", callback_data="personal_account")]
+            [InlineKeyboardButton(text="Назад к обращениям", callback_data="appeals")]
         )
 
         reply_markup = InlineKeyboardMarkup(inline_keyboard=keyboard)
@@ -361,16 +447,88 @@ class SupportCallback:
             keyboard.append(buttons[i:i + 3])
 
         keyboard.append(
-            [InlineKeyboardButton(text="Назад в личный кабинет", callback_data="personal_account")]
+            [InlineKeyboardButton(text="Назад к обращениям", callback_data="appeals")]
         )
 
         reply_markup = InlineKeyboardMarkup(inline_keyboard=keyboard)
         photo = InputMediaPhoto(media=FSInputFile(path), caption=caption)
         await callback.message.edit_media(media=photo, reply_markup=reply_markup)
 
-    # async def view_ticket(self, callback: CallbackQuery):
+    async def feedback_form(self, callback: CallbackQuery, state: FSMContext):
+        caption = ("В этом разделе вы можете:\n\nКратко описать свой вопрос и оставить свои контактные данные для обратной связи\n\n"
+                   "Опишите свою проблему в чате ниже:")
 
-    # async def feedback_form(self, callback: CallbackQuery):
+        message = await callback.message.edit_caption(caption=caption, reply_markup=BackToSupportMenu)
+
+        await state.update_data(message_id=message.message_id)
+        await state.set_state(FeedbackFormStates.Question)
+
+    async def process_form_question(self, message: Message, state: FSMContext):
+        await state.update_data(question=message.text)
+        await message.delete()
+
+        data = await state.get_data()
+        message_id = data["message_id"]
+
+        caption = "Введите как к вам обращаться:"
+        await message.bot.edit_message_caption(chat_id=message.chat.id, message_id=message_id, caption=caption, reply_markup=BackToSupportMenu)
+        await state.set_state(FeedbackFormStates.FirstName)
+
+    async def process_form_name(self, message: Message, state: FSMContext):
+        await state.update_data(first_name=message.text)
+        await message.delete()
+
+        data = await state.get_data()
+        message_id = data["message_id"]
+
+        caption = ("Введите данные для связи:\n\n"
+                   "1. Телефон в любом формате\n\n"
+                   "2. Email формата xxxxx@xxx.xx")
+        await message.bot.edit_message_caption(chat_id=message.chat.id, message_id=message_id, caption=caption,
+                                               reply_markup=BackToSupportMenu)
+        await state.set_state(FeedbackFormStates.PhoneOrMail)
+
+    async def process_form_contact_info(self, message: Message, state: FSMContext):
+        await state.update_data(mail_or_phone=message.text)
+        await message.delete()
+
+        data = await state.get_data()
+        message_id = data["message_id"]
+        question = data["question"]
+        first_name = data["first_name"]
+        contact_info = data["mail_or_phone"]
+        customer_telegram_id = message.from_user.id
+        customer_name = message.from_user.first_name
+
+
+        caption_for_user = ("Ваш запрос отправлен!")
+        text_for_admin = (f"Запрос на обратную связь от {customer_name} ({customer_telegram_id})\n\n"
+                          f"Вопрос: {question}\n\n"
+                          f"Имя для обращения: {first_name}\n\n"
+                          f"Где связаться: {contact_info}")
+
+        await message.bot.send_message(self.admin_id, text=text_for_admin)
+
+        await message.bot.edit_message_caption(chat_id=message.chat.id, message_id=message_id,
+                                               caption=caption_for_user, reply_markup=BackToSupportMenu)
+
+        await state.clear()
+
+    async def view_ticket(self, callback: CallbackQuery):
+        data = callback.data.split('_')
+        ticket_id = data[-1]
+
+        messages = get_ticket_messages(ticket_id)
+        caption = "\n\n".join(
+            [f"{message.created_at} сообщение от {'поддержки' if message.sender_type == SupportSenderType.admin else 'вас'}: {message.message_text}"
+             for message in messages]
+        )
+
+        await callback.message.edit_caption(caption=caption, reply_markup=BackToAppeals)
+
+
+
+
 
 
 class CatalogCallback:
@@ -763,8 +921,213 @@ class ShoppingCartAndOrdersCallback:
             await callback.message.edit_caption(caption=cart_text, reply_markup=keyboard)
 
 
+class PlaceOrderCallback:
+    def __init__(self, router: Router):
+        self.router = router
+        self.register_callbacks()
+
+    def register_callbacks(self):
+        self.router.callback_query(F.data == "place_order")(self.place_order)
+        self.router.callback_query(F.data == "add_personal_info")(self.add_personal_info)
+        self.router.callback_query(F.data.startswith("select_address_"))(self.select_address)
+        self.router.message(PersonalInfoStates.FirstName)(self.process_name)
+        self.router.message(PersonalInfoStates.PhoneNumber)(self.process_phone)
+        self.router.callback_query(F.data.startswith("change_recipient_"))(self.change_recipient)
+        self.router.callback_query(F.data.startswith("new_recipient_"))(self.new_recipient)
+        self.router.message(RecipientStates.FirstName)(self.process_recipient_name)
+        self.router.message(RecipientStates.PhoneNumber)(self.process_recipient_phone)
+        self.router.callback_query(F.data.startswith("set_recipient_customer_"))(self.set_recipient_customer)
+        self.router.callback_query(F.data.startswith("proceed_to_payment_"))(self.proceed_to_payment)
+        self.router.callback_query(F.data.startswith("confirm_order_"))(self.confirm_order)
+
+    async def place_order(self, callback: CallbackQuery):
+        customer_telegram_id = callback.from_user.id
+
+        customer = get_customer_by_telegram_id(customer_telegram_id)
+        addresses = get_customer_addresses(customer_telegram_id)
+
+        if not customer.real_name or not customer.phone:
+            await callback.message.edit_caption(caption='Мне не хватает твоих данных для оформления заказа, заполним их?',
+                                                reply_markup=AddPersonalInfo)
+
+        elif not addresses:
+            await callback.message.edit_caption(caption='Для оформления заказа необходимо заполнить адрес',
+                                                reply_markup=NewAddressCart)
+
+        else:
+            caption, keyboard = create_addresses_keyboard(addresses)
+            await callback.message.edit_caption(caption=caption,
+                                                reply_markup=keyboard)
+
+    async def add_personal_info(self, callback: CallbackQuery, state: FSMContext):
+        caption = "Пожалуйста введите свое полное имя\n(например: 'Владислав')"
+        message = await callback.message.edit_caption(caption=caption, reply_markup=BackToCart)
+        await state.update_data(message_id=message.message_id)
+        await state.set_state(PersonalInfoStates.FirstName)
+
+    async def process_name(self, message: Message, state: FSMContext):
+        await state.update_data(first_name=message.text)
+        await message.delete()
+
+        data = await state.get_data()
+        message_id = data.get("message_id")
+
+        caption = "Введите свой номер телефона в любом формате (например: '+79313521920':"
+        await message.bot.edit_message_caption(chat_id=message.chat.id, message_id=message_id, caption=caption)
+        await state.set_state(PersonalInfoStates.PhoneNumber)
+
+    async def process_phone(self, message: Message, state: FSMContext):
+        await state.update_data(phone_number=message.text)
+        await message.delete()
+
+        data = await state.get_data()
+        message_id = data.get("message_id")
+        real_name = data["first_name"]
+        phone_number = data["phone_number"]
+
+        customer_telegram_id = message.from_user.id
+        update_customer_data(customer_telegram_id=customer_telegram_id, real_name=real_name, phone_number=phone_number)
+
+        caption = f"Ваши данные сохранены, можно перейти к оформлению заказа!"
+        await message.bot.edit_message_caption(
+            chat_id=message.chat.id,
+            message_id=message_id,
+            caption=caption,
+            reply_markup=BackToCart
+        )
+        await state.clear()
+
+    async def select_address(self, callback: CallbackQuery):
+        data = callback.data.split('_')
+        address_id = data[-1]
+        customer_telegram_id = callback.from_user.id
+
+        customer = get_customer_by_telegram_id(customer_telegram_id)
+        shopping_cart_items = get_customer_shopping_cart(customer_telegram_id)
+        address = get_address_by_id(address_id=address_id)
+
+        caption, keyboard = create_order_confirmation(shopping_cart_items, address, customer)
+
+        await callback.message.edit_caption(caption=caption, reply_markup=keyboard)
+
+    async def change_recipient(self, callback: CallbackQuery):
+        data = callback.data.split('_')
+        address_id = data[-1]
+        customer_telegram_id = callback.from_user.id
+
+        address = get_address_by_id(address_id=address_id)
+        customer = get_customer_by_telegram_id(customer_telegram_id)
+
+        caption = (f"\n\nТекущий получатель: {address.recipient_name if address.recipient_name else customer.first_name}, Телефон: "
+                f"{address.recipient_number if address.recipient_name else customer.phone}\n\n")
+
+        if not address.recipient_name or not address.recipient_number:
+            keyboard = InlineKeyboardMarkup(inline_keyboard=[
+                [InlineKeyboardButton(text="Изменить получателя", callback_data=f"new_recipient_{address_id}")],
+                [InlineKeyboardButton(text="Назад к оформлению", callback_data=f"select_address_{address.address_id}")]
+            ])
+        else:
+            keyboard = InlineKeyboardMarkup(inline_keyboard=[
+                [InlineKeyboardButton(text="Получать заказ буду я", callback_data=f"set_recipient_customer_{address_id}")],
+                [InlineKeyboardButton(text="Назад к оформлению", callback_data=f"select_address_{address.address_id}")]
+            ])
+
+        await callback.message.edit_caption(caption=caption, reply_markup=keyboard)
+
+    async def new_recipient(self, callback: CallbackQuery, state: FSMContext):
+        data = callback.data.split('_')
+        address_id = data[-1]
+
+        keyboard = InlineKeyboardMarkup(inline_keyboard=[
+            [InlineKeyboardButton(text="Назад к оформлению", callback_data=f"select_address_{address_id}")]
+        ])
+        caption = "Пожалуйста введите полное имя получателя\n(например: 'Владислав')"
+        message = await callback.message.edit_caption(caption=caption, reply_markup=keyboard)
+        await state.update_data(address_id=address_id)
+        await state.update_data(message_id=message.message_id)
+        await state.set_state(RecipientStates.FirstName)
+
+    async def process_recipient_name(self, message: Message, state: FSMContext):
+        await state.update_data(first_name=message.text)
+        await message.delete()
+
+        data = await state.get_data()
+        address_id = data["address_id"]
+        message_id = data.get("message_id")
+
+        keyboard = InlineKeyboardMarkup(inline_keyboard=[
+            [InlineKeyboardButton(text="Назад к оформлению", callback_data=f"select_address_{address_id}")]
+        ])
+
+        caption = "Введите номер телефона получателя в любом формате:"
+        await message.bot.edit_message_caption(chat_id=message.chat.id, message_id=message_id, caption=caption, reply_markup=keyboard)
+        await state.set_state(RecipientStates.PhoneNumber)
+
+    async def process_recipient_phone(self, message: Message, state: FSMContext):
+        await state.update_data(phone_number=message.text)
+        await message.delete()
+
+        data = await state.get_data()
+        address_id = data["address_id"]
+        message_id = data["message_id"]
+        real_name = data["first_name"]
+        phone_number = data["phone_number"]
+
+        change_recipient_in_address(address_id, real_name, phone_number)
+
+        keyboard = InlineKeyboardMarkup(inline_keyboard=[
+            [InlineKeyboardButton(text="Назад к оформлению", callback_data=f"select_address_{address_id}")]
+        ])
+
+        caption = f"Ваши данные сохранены, можно перейти к оформлению заказа!"
+        await message.bot.edit_message_caption(
+            chat_id=message.chat.id,
+            message_id=message_id,
+            caption=caption,
+            reply_markup=keyboard
+        )
+        await state.clear()
+
+    async def set_recipient_customer(self, callback: CallbackQuery):
+        data = callback.data.split('_')
+        address_id = data[-1]
+
+        change_recipient_in_address(address_id, None, None)
+
+        keyboard = InlineKeyboardMarkup(inline_keyboard=[
+            [InlineKeyboardButton(text="Назад к оформлению", callback_data=f"select_address_{address_id}")]
+        ])
+
+        await callback.message.edit_caption(caption='Получатель успешно изменен!', reply_markup=keyboard)
+
+    async def proceed_to_payment(self, callback: CallbackQuery):
+        data = callback.data.split('_')
+        address_id = data[-1]
+        caption = 'Подтвердите оплату заказа'
+        keyboard = InlineKeyboardMarkup(inline_keyboard=[
+            [InlineKeyboardButton(text="Подтвердить", callback_data=f"confirm_order_{address_id}")],
+            [InlineKeyboardButton(text="Отменить", callback_data="shopping_cart")]
+        ])
+
+        await callback.message.edit_caption(caption=caption, reply_markup=keyboard)
+
+    async def confirm_order(self, callback: CallbackQuery):
+        data = callback.data.split('_')
+        address_id = data[-1]
+        _, path = main_menu_text()
+        customer_telegram_id = callback.from_user.id
+
+        create_order_and_clear_cart(customer_telegram_id, address_id)
+
+        caption = (f"Заказ успешно создан! Его статус вы можете отследить в личном кабинете"
+                   f"\n\nТакже с вами может связаться наш менеджер для уточнения деталей")
+
+        await callback.message.edit_caption(caption=caption, reply_markup=BackToMenu)
+
+
 MainMenuCallbackHandler = MainMenuCallback(router_callback)
 PersonalAccountCallbackHandler = PersonalAccountCallback(router_callback)
 SupportCallbackHandler = SupportCallback(router_callback, get_admin_id())
 CatalogCallbackHandler = CatalogCallback(router_callback)
 ShoppingCartAndOrdersCallbackHandler = ShoppingCartAndOrdersCallback(router_callback)
+PlaceOrderCallbackHandler = PlaceOrderCallback(router_callback)
