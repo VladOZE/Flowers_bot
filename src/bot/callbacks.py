@@ -1,9 +1,9 @@
-from aiogram.types import CallbackQuery, FSInputFile, InputMediaPhoto, Message, InlineKeyboardButton, InlineKeyboardMarkup, InputFile
+from aiogram.types import CallbackQuery, FSInputFile, InputMediaPhoto, Message
 from aiogram.filters import Command
 from aiogram import Router, F
 from functions import *
 from keyboards import *
-from quaries import *
+from src.database.quaries import *
 from states import SupportStates, PersonalOrderStates, NewAddressStates, PersonalInfoStates, RecipientStates, FeedbackFormStates
 from aiogram.fsm.context import FSMContext
 
